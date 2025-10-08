@@ -244,6 +244,19 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QPushButton" name="clearFaceButton">
+        <property name="text">
+         <string>Clear Face</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>26</height>
+         </size>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -260,6 +273,19 @@
         </property>
         <property name="styleSheet">
          <string notr="true">padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="clearPointButton">
+        <property name="text">
+         <string>Clear Point</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>26</height>
+         </size>
         </property>
        </widget>
       </item>

@@ -58,6 +58,9 @@ class TrimFaceDialogTaskPanel:
         self.form.clearPointButton.clicked.connect(self.on_clear_point)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
+        # Direction radio button connections
+        self.direction_normal_radio.toggled.connect(self.on_direction_changed)
+        self.direction_view_radio.toggled.connect(self.on_direction_changed)
         self.direction_custom_radio.toggled.connect(self.on_direction_changed)
         # Extension radio button connections
         self.extension_none_radio.toggled.connect(self.on_extension_changed)
@@ -161,7 +164,7 @@ class TrimFaceDialogTaskPanel:
         # Enable point selection group now that face is selected
         self.point_group.setEnabled(True)
 
-        # Check if curve extension is needed
+        # Check coverage with the default direction (which is Normal/face normal by default)
         self.check_and_show_extension_controls()
 
         QtCore.QTimer.singleShot(100, self.advance_to_point)
@@ -249,6 +252,10 @@ class TrimFaceDialogTaskPanel:
         self.vector_y_edit.setEnabled(is_custom)
         self.vector_z_edit.setEnabled(is_custom)
 
+        # Re-check extension needs when direction changes
+        if self.logic.face_object is not None:
+            self.check_and_show_extension_controls()
+
     def on_extension_changed(self):
         """Handle extension radio button changes"""
         if self.extension_none_radio.isChecked():
@@ -264,9 +271,34 @@ class TrimFaceDialogTaskPanel:
     def check_and_show_extension_controls(self):
         """
         Check if curves need extension and show/hide extension controls accordingly.
-        This is called after face selection.
+        Uses the currently selected projection direction for accurate detection.
         """
-        needs_extension = self.logic.check_curve_coverage()
+        # Determine the direction to use for checking based on radio button selection
+        if self.direction_normal_radio.isChecked():
+            # Use face normal - pass None to let logic determine it
+            projection_dir = None
+        elif self.direction_view_radio.isChecked():
+            # Use current view direction
+            try:
+                projection_dir = FreeCADGui.ActiveDocument.ActiveView.getViewDirection()
+            except:
+                projection_dir = None
+        elif self.direction_custom_radio.isChecked():
+            # Use custom vector if valid
+            try:
+                x = float(self.vector_x_edit.text())
+                y = float(self.vector_y_edit.text())
+                z = float(self.vector_z_edit.text())
+                projection_dir = FreeCAD.Vector(x, y, z)
+                if projection_dir.Length < 1e-6:
+                    projection_dir = None
+            except:
+                projection_dir = None
+        else:
+            projection_dir = None
+
+        # Check coverage using the determined direction
+        needs_extension = self.logic.check_curve_coverage(projection_direction=projection_dir)
 
         if needs_extension:
             # Show the extension group

@@ -8,6 +8,7 @@ __doc__ = 'Core business logic for trim face operations'
 import FreeCAD
 import Part
 from .. import curveExtend
+from .coverage_checker import CoverageChecker
 
 
 class TrimFaceLogic:
@@ -23,6 +24,8 @@ class TrimFaceLogic:
         self.extension_mode = 'boundary'  # 'none', 'boundary', 'custom'
         self.extension_distance = 10.0  # mm for custom mode
         self.needs_extension = False
+        # Coverage checker
+        self.coverage_checker = CoverageChecker()
 
     def add_trimming_curve(self, obj, subname):
         self.trimming_curves.append((obj, subname))
@@ -61,157 +64,242 @@ class TrimFaceLogic:
             FreeCAD.Console.PrintWarning(f"Invalid extension distance: {distance}\n")
             self.extension_distance = 10.0
 
-    def check_curve_coverage(self):
+    def check_curve_coverage(self, projection_direction=None):
         """
         Check if trimming curves fully cover the face when projected.
         Returns True if extension is needed, False otherwise.
 
-        This uses the projection direction to determine if the curve
-        will adequately cover the surface.
+        Args:
+            projection_direction: FreeCAD.Vector or None. If None, uses face normal.
         """
-        if not self.trimming_curves or not self.face_object:
-            return False
+        needs_extension = self.coverage_checker.check_curve_coverage(
+            self.trimming_curves,
+            self.face_object,
+            projection_direction
+        )
+        self.needs_extension = needs_extension
+        return needs_extension
 
+    def _project_curve_to_face_uv(self, edge_shape, face_shape, direction):
+        """
+        Project a curve onto a face along a direction and return the UV bounds on the face.
+
+        Args:
+            edge_shape: Part.Edge - the curve to project
+            face_shape: Part.Face - the face to project onto
+            direction: FreeCAD.Vector - projection direction
+
+        Returns:
+            dict: {'min_u': float, 'max_u': float, 'min_v': float, 'max_v': float}
+                  or None if projection fails
+        """
         try:
-            face_obj = self.face_object[0]
-            face_subname = self.face_object[1]
-            face_shape = face_obj.Shape.getElement(face_subname)
+            # Sample points along the curve
+            sample_points = []
 
-            # Determine projection direction
-            if self.use_auto_direction or self.direction is None:
-                # Use face normal at center
+            # Add vertices
+            for vertex in edge_shape.Vertexes:
+                sample_points.append(vertex.Point)
+
+            # Sample along the curve
+            for i in range(50):
+                t = edge_shape.FirstParameter + (edge_shape.LastParameter - edge_shape.FirstParameter) * i / 49.0
+                sample_points.append(edge_shape.valueAt(t))
+
+            # Use discretize for additional points
+            try:
+                discretized = edge_shape.discretize(Number=100)
+                sample_points.extend(discretized)
+            except:
+                pass
+
+            # Project each point onto the face and get UV coordinates
+            min_u = float('inf')
+            max_u = float('-inf')
+            min_v = float('inf')
+            max_v = float('-inf')
+
+            successful_projections = 0
+            failed_projections = 0
+
+            FreeCAD.Console.PrintMessage(f"  Projecting {len(sample_points)} curve points onto face...\n")
+
+            for point in sample_points:
                 try:
-                    face_center = face_shape.CenterOfMass
-                    uv = face_shape.Surface.parameter(face_center)
-                    proj_direction = face_shape.normalAt(uv[0], uv[1])
-                except:
-                    proj_direction = FreeCAD.Vector(0, 0, 1)
-                    FreeCAD.Console.PrintWarning("Using default direction for detection\n")
-            else:
-                proj_direction = self.direction
+                    # Project the curve point onto the face along the projection direction
+                    # Create a line from the point in both directions along the projection vector
+                    # and find intersections with the face
 
-            # Normalize the direction
-            proj_direction.normalize()
+                    # Make a long line segment in the projection direction
+                    line_length = 1000.0  # mm, should be long enough
+                    p1 = point - direction * line_length
+                    p2 = point + direction * line_length
 
-            # Project face edges onto a plane perpendicular to projection direction
-            # to get the "footprint" that needs to be covered
-            face_projected_size = self._get_projected_size(face_shape, proj_direction)
+                    # Create a line edge for intersection
+                    import Part
+                    projection_line = Part.LineSegment(p1, p2).toShape()
 
-            # Check each curve's projected length
-            for obj_ref, subname in self.trimming_curves:
-                edge_shape = obj_ref.Shape.getElement(subname)
+                    # Instead of using common() which only finds intersections within face bounds,
+                    # project directly onto the underlying surface (which is infinite/extended)
 
-                # Project edge onto the same plane
-                edge_projected_length = self._get_projected_length(edge_shape, proj_direction)
+                    # Find the point on the infinite surface along the projection line
+                    # Sample along the line and find the closest point on surface
+                    min_dist = float('inf')
+                    best_uv = None
+                    best_intersection = None
 
-                # If projected edge length is less than 90% of face projected size, needs extension
-                if edge_projected_length < 0.9 * face_projected_size:
-                    FreeCAD.Console.PrintMessage(
-                        f"Curve {obj_ref.Name}.{subname} projected length ({edge_projected_length:.2f}mm) "
-                        f"< face size ({face_projected_size:.2f}mm) - extension recommended\n"
-                    )
-                    self.needs_extension = True
-                    return True
-                else:
-                    FreeCAD.Console.PrintMessage(
-                        f"Curve {obj_ref.Name}.{subname} projected length ({edge_projected_length:.2f}mm) "
-                        f"adequate for face size ({face_projected_size:.2f}mm)\n"
-                    )
+                    for i in range(50):
+                        test_point = p1 + (p2 - p1) * i / 49.0
+                        try:
+                            test_u, test_v = face_shape.Surface.parameter(test_point)
+                            surf_point = face_shape.Surface.value(test_u, test_v)
 
-            self.needs_extension = False
-            return False
+                            # Calculate distance from surface point to projection line
+                            diff = surf_point - point
+                            t = diff.dot(direction)
+                            closest_on_line = point + direction * t
+                            dist = surf_point.distanceToPoint(closest_on_line)
+
+                            if dist < min_dist:
+                                min_dist = dist
+                                best_uv = (test_u, test_v)
+                                best_intersection = surf_point
+                        except:
+                            continue
+
+                    # Use the best projection found
+                    if best_uv and min_dist < 50.0:  # 50mm tolerance
+                        u, v = best_uv
+                        min_u = min(min_u, u)
+                        max_u = max(max_u, u)
+                        min_v = min(min_v, v)
+                        max_v = max(max_v, v)
+                        successful_projections += 1
+                    else:
+                        # Projection failed - point too far from surface
+                        failed_projections += 1
+
+                except Exception as e:
+                    # Point might not project onto face, skip it
+                    failed_projections += 1
+                    continue
+
+            FreeCAD.Console.PrintMessage(
+                f"  Projection results: {successful_projections} successful, {failed_projections} failed\n"
+            )
+
+            if successful_projections < 2:
+                # Not enough points projected successfully
+                FreeCAD.Console.PrintWarning(
+                    f"  Only {successful_projections} points projected successfully - too few for coverage check\n"
+                )
+                return None
+
+            return {'min_u': min_u, 'max_u': max_u, 'min_v': min_v, 'max_v': max_v}
 
         except Exception as e:
-            FreeCAD.Console.PrintWarning(f"Error checking curve coverage: {str(e)}\n")
-            import traceback
-            traceback.print_exc()
-            self.needs_extension = False
-            return False
+            FreeCAD.Console.PrintWarning(f"Error in _project_curve_to_face_uv: {str(e)}\n")
+            return None
 
-    def _get_projected_length(self, edge_shape, direction):
+    def _get_bounds_in_plane(self, shape, direction):
         """
-        Get the length of an edge when projected onto a plane perpendicular to direction.
+        Get the 2D bounding box of a shape when projected onto a plane perpendicular to direction.
 
         Args:
-            edge_shape: Part.Edge to measure
+            shape: Part.Shape (Face or Edge)
             direction: FreeCAD.Vector projection direction (normalized)
 
         Returns:
-            float: Projected length in mm
+            dict: {'min_u': float, 'max_u': float, 'min_v': float, 'max_v': float}
+                  u and v are orthogonal axes in the projection plane
         """
-        # Get start and end points
-        start_point = edge_shape.valueAt(edge_shape.FirstParameter)
-        end_point = edge_shape.valueAt(edge_shape.LastParameter)
+        # Create two orthogonal vectors perpendicular to direction
+        direction = direction.normalize()
 
-        # Project both points onto a plane perpendicular to direction
-        # We create a plane at origin with normal = direction
-        plane_normal = direction.normalize()
+        # Find a vector not parallel to direction
+        if abs(direction.x) < 0.9:
+            temp = FreeCAD.Vector(1, 0, 0)
+        else:
+            temp = FreeCAD.Vector(0, 1, 0)
 
-        # Distance along the projection direction from a reference point (origin)
-        start_dist = start_point.dot(plane_normal)
-        end_dist = end_point.dot(plane_normal)
+        # Create orthonormal basis for the projection plane
+        u_axis = direction.cross(temp).normalize()
+        v_axis = direction.cross(u_axis).normalize()
 
-        # Project points onto plane perpendicular to direction
-        start_projected = FreeCAD.Vector(
-            start_point.x - start_dist * plane_normal.x,
-            start_point.y - start_dist * plane_normal.y,
-            start_point.z - start_dist * plane_normal.z
-        )
-        end_projected = FreeCAD.Vector(
-            end_point.x - end_dist * plane_normal.x,
-            end_point.y - end_dist * plane_normal.y,
-            end_point.z - end_dist * plane_normal.z
-        )
+        # Get points to project
+        points = []
+        if hasattr(shape, 'Edges'):  # Face
+            for edge in shape.Edges:
+                # Add vertices first to ensure we get actual endpoints
+                for vertex in edge.Vertexes:
+                    points.append(vertex.Point)
+                # Sample multiple points along each edge for better accuracy
+                for i in range(10):
+                    t = edge.FirstParameter + (edge.LastParameter - edge.FirstParameter) * i / 9.0
+                    points.append(edge.valueAt(t))
+        else:  # Edge
+            # Add vertices first to ensure we get actual endpoints
+            for vertex in shape.Vertexes:
+                points.append(vertex.Point)
+            # Sample many points along the edge for accuracy
+            for i in range(50):
+                t = shape.FirstParameter + (shape.LastParameter - shape.FirstParameter) * i / 49.0
+                points.append(shape.valueAt(t))
+            # Also use discretize for more accurate representation
+            try:
+                discretized = shape.discretize(Number=100)
+                points.extend(discretized)
+            except:
+                pass
 
-        # Distance between projected points
-        return start_projected.distanceToPoint(end_projected)
+        if not points:
+            return {'min_u': 0, 'max_u': 0, 'min_v': 0, 'max_v': 0}
 
-    def _get_projected_size(self, face_shape, direction):
+        # Project all points onto the plane and find bounds
+        min_u = float('inf')
+        max_u = float('-inf')
+        min_v = float('inf')
+        max_v = float('-inf')
+
+        for point in points:
+            # Project point onto u and v axes
+            u_coord = point.dot(u_axis)
+            v_coord = point.dot(v_axis)
+
+            min_u = min(min_u, u_coord)
+            max_u = max(max_u, u_coord)
+            min_v = min(min_v, v_coord)
+            max_v = max(max_v, v_coord)
+
+        return {'min_u': min_u, 'max_u': max_u, 'min_v': min_v, 'max_v': max_v}
+
+    def _bounds_contain(self, curve_bounds, face_bounds, tolerance=0.9):
         """
-        Get the maximum size of a face when projected onto a plane perpendicular to direction.
+        Check if curve bounds contain (or nearly contain) face bounds.
 
         Args:
-            face_shape: Part.Face to measure
-            direction: FreeCAD.Vector projection direction (normalized)
+            curve_bounds: dict with min_u, max_u, min_v, max_v for curve
+            face_bounds: dict with min_u, max_u, min_v, max_v for face
+            tolerance: float, fraction of face extent that curve must cover (0.9 = 90%)
 
         Returns:
-            float: Maximum projected dimension in mm
+            bool: True if curve adequately covers face
         """
-        # Get all vertices of the face
-        vertices = []
-        for edge in face_shape.Edges:
-            vertices.append(edge.valueAt(edge.FirstParameter))
-            vertices.append(edge.valueAt(edge.LastParameter))
+        # Calculate required coverage in each direction
+        face_u_extent = face_bounds['max_u'] - face_bounds['min_u']
+        face_v_extent = face_bounds['max_v'] - face_bounds['min_v']
 
-        if not vertices:
-            # Fallback to bounding box diagonal
-            bbox = face_shape.BoundBox
-            return ((bbox.XMax - bbox.XMin)**2 +
-                    (bbox.YMax - bbox.YMin)**2 +
-                    (bbox.ZMax - bbox.ZMin)**2) ** 0.5
+        # Calculate margins needed (e.g., if tolerance=0.9, we allow 5% margin on each side)
+        u_margin = face_u_extent * (1 - tolerance) / 2.0
+        v_margin = face_v_extent * (1 - tolerance) / 2.0
 
-        # Project all vertices onto plane perpendicular to direction
-        plane_normal = direction.normalize()
-        projected_points = []
+        # Check if curve covers face with tolerance
+        u_covered = (curve_bounds['min_u'] <= face_bounds['min_u'] + u_margin and
+                     curve_bounds['max_u'] >= face_bounds['max_u'] - u_margin)
+        v_covered = (curve_bounds['min_v'] <= face_bounds['min_v'] + v_margin and
+                     curve_bounds['max_v'] >= face_bounds['max_v'] - v_margin)
 
-        for vertex in vertices:
-            dist = vertex.dot(plane_normal)
-            projected = FreeCAD.Vector(
-                vertex.x - dist * plane_normal.x,
-                vertex.y - dist * plane_normal.y,
-                vertex.z - dist * plane_normal.z
-            )
-            projected_points.append(projected)
-
-        # Find maximum distance between any two projected points
-        max_distance = 0
-        for i, p1 in enumerate(projected_points):
-            for p2 in projected_points[i+1:]:
-                distance = p1.distanceToPoint(p2)
-                if distance > max_distance:
-                    max_distance = distance
-
-        return max_distance
+        return u_covered and v_covered
 
     def _extend_edge_to_boundary(self, edge_shape):
         """
