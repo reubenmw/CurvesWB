@@ -6,7 +6,7 @@ from . import ICONPATH
 
 class CurvesWorkbench(Gui.Workbench):
     """FreeCAD workbench that offers a collection of tools mainly related to Nurbs curves and surfaces."""
-    MenuText = "Curves"
+    MenuText = "Curves Fork"
     ToolTip = "a workbench dedicated to curves and surfaces"
     Icon = os.path.join(ICONPATH, "blendSurf.svg")
     toolbox = []
@@ -65,6 +65,7 @@ class CurvesWorkbench(Gui.Workbench):
         from . import Truncate_Extend_FP
         from . import WaterLineFP
         from . import MapOnFaceFP
+        from . import TrimFaceDialog
         # from . import ProfileSupportFP
         # from . import Sweep2RailsFP
         # from . import HQRuledSurfaceFP
@@ -75,7 +76,7 @@ class CurvesWorkbench(Gui.Workbench):
                      "Discretize", "Approximate", "Interpolate", "ParametricBlendCurve",
                      "ParametricComb", "cos"]
 
-        surflist = ["ZebraTool", "Trim", "IsoCurve", "SoS", "Curves_MapOnFace", "sw2r", "profileSupportCmd",
+        surflist = ["ZebraTool", "Trim", "TrimDialog", "IsoCurve", "SoS", "Curves_MapOnFace", "sw2r", "profileSupportCmd",
                     "profile", "pipeshell", "gordon", "segment_surface", "comp_spring",
                     "ReflectLines", "MultiLoft", "Curves_BlendSurf2", "Curves_BlendSolid",
                     "Curves_FlattenFace", "Curves_RotationSweep", 'Curves_SurfaceAnalysis',
@@ -140,7 +141,7 @@ class CurvesWorkbench(Gui.Workbench):
             contextlist = ["Curves_adjacent_faces", "Curves_bspline_to_console"]  # list of commands
             self.appendContextMenu("Curves", contextlist)
         elif recipient == "Tree":
-            contextlist = ["join", "split", "Discretize", "Approximate", "Interpolate"]  # list of commands
+            contextlist = ["join", "split", "Discretize", "Approximate", "Interpolate", "TrimDialog"]  # list of commands
             self.appendContextMenu("Curves", contextlist)
 
     def GetClassName(self):
