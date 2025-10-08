@@ -41,6 +41,7 @@ class TrimFaceDialogTaskPanel:
         self.extension_distance_edit = self.form.extensionDistanceEdit
         # Other controls
         self.face_label = self.form.faceLabel
+        self.point_group = self.form.pointGroup
         self.point_label = self.form.pointLabel
         self.direction_normal_radio = self.form.directionNormalRadio
         self.direction_view_radio = self.form.directionViewRadio
@@ -53,6 +54,8 @@ class TrimFaceDialogTaskPanel:
 
         self.clear_curves_button.clicked.connect(self.on_clear_curves)
         self.remove_curve_button.clicked.connect(self.on_remove_curve)
+        self.form.clearFaceButton.clicked.connect(self.on_clear_face)
+        self.form.clearPointButton.clicked.connect(self.on_clear_point)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
         self.direction_custom_radio.toggled.connect(self.on_direction_changed)
@@ -65,8 +68,9 @@ class TrimFaceDialogTaskPanel:
         self.selection_gate = None
         self.selection_observer = None
 
-        # Disable Apply button initially
+        # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
+        self.point_group.setEnabled(False)
 
         self.populate_initial_selection()
         self.start_workflow()
@@ -153,6 +157,9 @@ class TrimFaceDialogTaskPanel:
         face_name = f"{obj.Name}.{subname}"
         self.face_label.setText(face_name)
         self.face_label.setStyleSheet("padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;")
+
+        # Enable point selection group now that face is selected
+        self.point_group.setEnabled(True)
 
         # Check if curve extension is needed
         self.check_and_show_extension_controls()
@@ -285,6 +292,38 @@ class TrimFaceDialogTaskPanel:
         if current_row >= 0:
             self.logic.remove_trimming_curve(current_row)
             self.curve_list.takeItem(current_row)
+
+    def on_clear_face(self):
+        """Clear the selected face"""
+        self.logic.set_face_object(None)
+        self.face_label.setText("No face selected")
+        self.face_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.extension_group.setVisible(False)
+
+        # Also clear and disable point when face is cleared
+        self.logic.set_trim_point(None)
+        self.point_label.setText("No point selected")
+        self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.point_group.setEnabled(False)
+
+        self.update_apply_button()
+
+        # Restart face selection if we're past that stage
+        if self.workflow_stage in ['point', 'complete']:
+            self.cleanup_selection()
+            self.start_face_selection()
+
+    def on_clear_point(self):
+        """Clear the selected point"""
+        self.logic.set_trim_point(None)
+        self.point_label.setText("No point selected")
+        self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.update_apply_button()
+
+        # Restart point selection if we're at completion stage
+        if self.workflow_stage == 'complete':
+            self.cleanup_selection()
+            self.start_point_selection()
 
     def on_apply(self):
         """Apply the trim operation"""
