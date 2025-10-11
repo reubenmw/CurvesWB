@@ -18,6 +18,8 @@ from .selection_handlers import (
     FaceSelectionObserver,
     PointSelectionObserver
 )
+from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI
+from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer
 
 
 class TrimFaceDialogTaskPanel:
@@ -26,14 +28,19 @@ class TrimFaceDialogTaskPanel:
     def __init__(self):
         self.logic = TrimFaceLogic()
 
+        # Load the UI form from .ui file (Qt Designer interface)
         self.form = FreeCADGui.PySideUic.loadUi(
-            os.path.join(os.path.dirname(__file__), "TrimFaceDialog.ui"))
+            os.path.join(os.path.dirname(__file__), "trim_face_dialog.ui"))
 
+        # UI References - Like React refs, but for Qt widgets
+        # These give us direct access to UI elements for event handling and updates
         self.status_label = self.form.statusLabel
         self.curve_list = self.form.curveListWidget
         self.clear_curves_button = self.form.clearCurvesButton
         self.remove_curve_button = self.form.removeCurveButton
-        # Extension controls
+        
+        # Extension controls UI references - Phase 1: Conditional UI elements
+        # These are hidden by default and shown when curves are detected as short
         self.extension_group = self.form.extensionGroup
         self.extension_none_radio = self.form.extensionNoneRadio
         self.extension_boundary_radio = self.form.extensionBoundaryRadio
@@ -49,27 +56,48 @@ class TrimFaceDialogTaskPanel:
         self.vector_x_edit = self.form.vectorXEdit
         self.vector_y_edit = self.form.vectorYEdit
         self.vector_z_edit = self.form.vectorZEdit
+        self.projection_visualizer_check = self.form.projectionVisualizerCheck
         self.apply_button = self.form.applyButton
         self.cancel_button = self.form.cancelButton
 
+        # Event Handlers (Like onClick in React)
+        # Connect UI events to handler methods using Qt's signal/slot system
         self.clear_curves_button.clicked.connect(self.on_clear_curves)
         self.remove_curve_button.clicked.connect(self.on_remove_curve)
         self.form.clearFaceButton.clicked.connect(self.on_clear_face)
         self.form.clearPointButton.clicked.connect(self.on_clear_point)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
-        # Direction radio button connections
+        
+        # Direction radio button connections - event handling pattern
         self.direction_normal_radio.toggled.connect(self.on_direction_changed)
         self.direction_view_radio.toggled.connect(self.on_direction_changed)
         self.direction_custom_radio.toggled.connect(self.on_direction_changed)
-        # Extension radio button connections
+
+        # Vector input field connections - for bidirectional sync with gizmo
+        self.vector_x_edit.editingFinished.connect(self._on_vector_field_changed)
+        self.vector_y_edit.editingFinished.connect(self._on_vector_field_changed)
+        self.vector_z_edit.editingFinished.connect(self._on_vector_field_changed)
+        
+        # Extension radio button connections - Phase 1 event handling
+        # These handle user preference changes for extension mode
         self.extension_none_radio.toggled.connect(self.on_extension_changed)
         self.extension_boundary_radio.toggled.connect(self.on_extension_changed)
         self.extension_custom_radio.toggled.connect(self.on_extension_changed)
 
+        # Projection visualizer connection
+        self.projection_visualizer_check.toggled.connect(self.on_projection_visualizer_changed)
+
         self.workflow_stage = 'edges'
         self.selection_gate = None
         self.selection_observer = None
+
+        # Vector direction gizmo components
+        self.vector_gizmo = None
+        self.vector_ui = None
+
+        # Projection visualizer component
+        self.projection_visualizer = None
 
         # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
@@ -155,7 +183,12 @@ class TrimFaceDialogTaskPanel:
         FreeCADGui.Selection.addObserver(self.selection_observer)
 
     def on_face_selected(self, obj, subname):
-        """Handle face selection"""
+        """
+        Handle face selection - Integration Point for Extension Detection
+        
+        This is where Phase 1 extension detection is triggered in the workflow.
+        After face selection, we check if curves need extension and show controls.
+        """
         self.logic.set_face_object((obj, subname))
         face_name = f"{obj.Name}.{subname}"
         self.face_label.setText(face_name)
@@ -164,7 +197,8 @@ class TrimFaceDialogTaskPanel:
         # Enable point selection group now that face is selected
         self.point_group.setEnabled(True)
 
-        # Check coverage with the default direction (which is Normal/face normal by default)
+        # Integration Point: Trigger extension detection after face selection
+        # This calls the logic layer to check if curves are too short
         self.check_and_show_extension_controls()
 
         QtCore.QTimer.singleShot(100, self.advance_to_point)
@@ -252,12 +286,32 @@ class TrimFaceDialogTaskPanel:
         self.vector_y_edit.setEnabled(is_custom)
         self.vector_z_edit.setEnabled(is_custom)
 
+        # Show/hide vector gizmo based on Custom Vector selection
+        if is_custom:
+            self._show_vector_gizmo()
+        else:
+            self._hide_vector_gizmo()
+
         # Re-check extension needs when direction changes
         if self.logic.face_object is not None:
             self.check_and_show_extension_controls()
 
+        # Update projection visualization if it's active (and only if user explicitly enabled it)
+        if self.projection_visualizer_check.isChecked():
+            self._hide_projection_visualizer()
+            self._show_projection_visualizer()
+        # Note: Do NOT automatically activate projection visualizer
+        # It should only appear when user explicitly checks the checkbox
+
     def on_extension_changed(self):
-        """Handle extension radio button changes"""
+        """
+        Handle extension radio button changes - Event Handler Pattern
+        
+        This is like a state management handler in React. When user changes
+        extension mode, we update the logic layer and enable/disable related UI.
+        
+        Event-driven architecture: User action → Handler → State update → UI update
+        """
         if self.extension_none_radio.isChecked():
             self.logic.set_extension_mode('none')
             self.extension_distance_edit.setEnabled(False)
@@ -266,12 +320,113 @@ class TrimFaceDialogTaskPanel:
             self.extension_distance_edit.setEnabled(False)
         elif self.extension_custom_radio.isChecked():
             self.logic.set_extension_mode('custom')
-            self.extension_distance_edit.setEnabled(True)
+            self.extension_distance_edit.setEnabled(True)  # Enable input for custom distance
+
+    def on_projection_visualizer_changed(self):
+        """
+        Handle projection visualizer checkbox changes.
+        
+        Shows or hides the curve projection visualization in the 3D viewport
+        based on the current selection and projection direction.
+        """
+        is_checked = self.projection_visualizer_check.isChecked()
+        
+        if is_checked:
+            # Show visualization
+            self._show_projection_visualizer()
+        else:
+            # Hide visualization
+            self._hide_projection_visualizer()
+
+    def _show_projection_visualizer(self):
+        """Show the projection visualization for current curves and face"""
+        try:
+            # Check if we have the required objects
+            if not self.logic.trimming_curves or not self.logic.face_object:
+                FreeCAD.Console.PrintWarning("Cannot show projection visualization: missing curves or face\n")
+                self.projection_visualizer_check.setChecked(False)
+                return
+
+            # Create projection visualizer if it doesn't exist
+            if self.projection_visualizer is None:
+                self.projection_visualizer = ProjectionVisualizer()
+
+            # Get projection direction
+            projection_dir = self._get_current_projection_direction()
+
+            # Get first curve and face for visualization
+            curve_obj, curve_subname = self.logic.trimming_curves[0]
+            face_obj, face_subname = self.logic.face_object
+
+            # Visualize the projection
+            self.projection_visualizer.visualize_projection(
+                curve_obj, curve_subname, face_obj, face_subname, projection_dir
+            )
+
+            FreeCAD.Console.PrintMessage("Projection visualization enabled\n")
+
+        except Exception as e:
+            FreeCAD.Console.PrintError(f"Failed to show projection visualization: {str(e)}\n")
+            self.projection_visualizer_check.setChecked(False)
+
+    def _hide_projection_visualizer(self):
+        """Hide the projection visualization"""
+        if self.projection_visualizer is not None:
+            try:
+                self.projection_visualizer.clear_visualization()
+                FreeCAD.Console.PrintMessage("Projection visualization disabled\n")
+            except Exception as e:
+                FreeCAD.Console.PrintError(f"Failed to hide projection visualization: {str(e)}\n")
+
+    def _get_current_projection_direction(self):
+        """
+        Get the current projection direction based on radio button selection.
+        
+        Returns:
+            FreeCAD.Vector or None: Current projection direction
+        """
+        if self.direction_normal_radio.isChecked():
+            # Use face normal (pass None to let visualizer determine it)
+            return None
+        elif self.direction_view_radio.isChecked():
+            # Use current view direction
+            try:
+                return FreeCADGui.ActiveDocument.ActiveView.getViewDirection()
+            except:
+                return None
+        elif self.direction_custom_radio.isChecked():
+            # Use custom vector if valid
+            try:
+                x_text = self.vector_x_edit.text().strip()
+                y_text = self.vector_y_edit.text().strip()
+                z_text = self.vector_z_edit.text().strip()
+
+                x = float(x_text) if x_text else 0.0
+                y = float(y_text) if y_text else 0.0
+                z = float(z_text) if z_text else 0.0
+
+                custom_vector = FreeCAD.Vector(x, y, z)
+                if custom_vector.Length < 1e-6:
+                    return None
+                return custom_vector
+            except:
+                return None
+        else:
+            return None
 
     def check_and_show_extension_controls(self):
         """
         Check if curves need extension and show/hide extension controls accordingly.
         Uses the currently selected projection direction for accurate detection.
+        
+        Conditional Rendering Pattern (Qt version):
+        In React: {needsExtension && <ExtensionGroup />}
+        In Qt: self.extension_group.setVisible(needs_extension)
+        
+        This method demonstrates the complete Phase 1 workflow:
+        1. Get current projection direction from UI
+        2. Call logic layer for detection
+        3. Show/hide UI based on result
         """
         # Determine the direction to use for checking based on radio button selection
         if self.direction_normal_radio.isChecked():
@@ -301,11 +456,11 @@ class TrimFaceDialogTaskPanel:
         needs_extension = self.logic.check_curve_coverage(projection_direction=projection_dir)
 
         if needs_extension:
-            # Show the extension group
+            # Show the extension group - conditional rendering
             self.extension_group.setVisible(True)
             FreeCAD.Console.PrintMessage("Extension controls shown - curve may be shorter than surface\n")
         else:
-            # Hide the extension group
+            # Hide the extension group - clean interface when not needed
             self.extension_group.setVisible(False)
             FreeCAD.Console.PrintMessage("Curves appear to cover surface adequately\n")
 
@@ -376,12 +531,29 @@ class TrimFaceDialogTaskPanel:
             elif self.direction_custom_radio.isChecked():
                 self.logic.set_use_auto_direction(False)
                 try:
-                    x = float(self.vector_x_edit.text())
-                    y = float(self.vector_y_edit.text())
-                    z = float(self.vector_z_edit.text())
+                    x_text = self.vector_x_edit.text().strip()
+                    y_text = self.vector_y_edit.text().strip()
+                    z_text = self.vector_z_edit.text().strip()
+
+                    x = float(x_text) if x_text else 0.0
+                    y = float(y_text) if y_text else 0.0
+                    z = float(z_text) if z_text else 0.0
+
                     custom_vector = FreeCAD.Vector(x, y, z)
+
+                    # Smart default: If 0,0,0 entered, use face normal
                     if custom_vector.Length < 1e-6:
-                        raise ValueError("Vector cannot be zero length")
+                        if self.logic.face_object is not None:
+                            face_obj = self.logic.face_object[0]
+                            face_subname = self.logic.face_object[1]
+                            face_shape = face_obj.Shape.getElement(face_subname)
+                            u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
+                            v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                            custom_vector = face_shape.normalAt(u_mid, v_mid)
+                            FreeCAD.Console.PrintMessage("Using face normal for zero vector in apply\n")
+                        else:
+                            raise ValueError("Vector cannot be zero length and no face selected")
+
                     self.logic.set_direction(custom_vector)
                 except ValueError as e:
                     self.status_label.setText("Error: Invalid custom vector")
@@ -390,6 +562,10 @@ class TrimFaceDialogTaskPanel:
                     return
 
             self.logic.execute_trim()
+
+            # Clean up gizmo BEFORE closing dialog
+            self._cleanup_vector_gizmo()
+
             FreeCADGui.Control.closeDialog()
         except Exception as e:
             self.status_label.setText(f"Error: {str(e)}")
@@ -398,6 +574,8 @@ class TrimFaceDialogTaskPanel:
 
     def on_cancel(self):
         """Cancel and close dialog"""
+        # Clean up gizmo BEFORE closing dialog
+        self._cleanup_vector_gizmo()
         FreeCADGui.Control.closeDialog()
 
     def accept(self):
@@ -422,18 +600,167 @@ class TrimFaceDialogTaskPanel:
                     self.logic.set_direction(custom_vector)
                 except ValueError as e:
                     FreeCAD.Console.PrintError(f"Invalid vector: {str(e)}\n")
+                    self.cleanup()  # Clean up before returning
                     return False
 
             self.logic.execute_trim()
+
+            # Clean up gizmo BEFORE cleanup
+            self._cleanup_vector_gizmo()
+            self.cleanup()  # Clean up after successful execution
             return True
         except Exception as e:
             FreeCAD.Console.PrintError(f"Error: {str(e)}\n")
+            self._cleanup_vector_gizmo()
+            self.cleanup()  # Clean up on error
             return False
 
     def reject(self):
         """Called when dialog rejects"""
+        self._cleanup_vector_gizmo()
         self.cleanup()
         return True
+
+    def needsFullSpace(self):
+        """
+        Return True to hide the default Ok/Cancel buttons at the top.
+        We have our own Apply/Cancel buttons, so we don't need the defaults.
+        """
+        return True
+
+    def _show_vector_gizmo(self):
+        """
+        Show the 3D vector direction gizmo in the viewport.
+
+        Uses the new VectorGizmoUI helper for standardized integration.
+        """
+        try:
+            # Determine gizmo position and size based on face
+            arrow_length = 50.0  # Default
+            arrow_size = 10.0    # Default
+            position = FreeCAD.Vector(0, 0, 0)  # Default
+
+            if self.logic.face_object is not None:
+                # Position at face centroid
+                face_obj = self.logic.face_object[0]
+                face_subname = self.logic.face_object[1]
+                face_shape = face_obj.Shape.getElement(face_subname)
+                position = face_shape.CenterOfMass
+
+                # Scale arrow based on face size
+                bbox = face_shape.BoundBox
+                face_diagonal = ((bbox.XLength**2 + bbox.YLength**2 + bbox.ZLength**2)**0.5)
+                arrow_length = face_diagonal * 0.3  # 30% of face diagonal
+                arrow_size = arrow_length * 0.15     # 15% of arrow length
+
+                FreeCAD.Console.PrintMessage(
+                    f"Face diagonal: {face_diagonal:.2f}mm, Arrow length: {arrow_length:.2f}mm\n"
+                )
+            elif self.logic.trim_point is not None:
+                # Position at trim point
+                position = self.logic.trim_point
+
+            # Create gizmo if it doesn't exist
+            if self.vector_gizmo is None:
+                self.vector_gizmo = VectorGizmo(
+                    position=position,
+                    direction=FreeCAD.Vector(1, 0, 0),  # Default direction
+                    arrow_length=arrow_length,
+                    arrow_size=arrow_size,
+                    color=(0.0, 1.0, 1.0)  # Cyan
+                )
+                
+                # Create UI integration helper
+                self.vector_ui = VectorGizmoUI(
+                    gizmo=self.vector_gizmo,
+                    dialog=self,
+                    x_field=self.vector_x_edit,
+                    y_field=self.vector_y_edit,
+                    z_field=self.vector_z_edit,
+                    smart_default_enabled=True,
+                    smart_default_callback=self._get_face_normal_for_vector
+                )
+                
+                FreeCAD.Console.PrintMessage("Vector gizmo and UI helper created\n")
+            else:
+                # Update existing gizmo position and scaling
+                self.vector_ui.set_gizmo_position(position)
+                self.vector_ui.set_gizmo_scaling(arrow_length, arrow_size)
+                self.vector_ui.show_gizmo()
+                FreeCAD.Console.PrintMessage("Vector gizmo updated and shown\n")
+
+        except Exception as e:
+            FreeCAD.Console.PrintError(f"Failed to show vector gizmo: {str(e)}\n")
+            import traceback
+            traceback.print_exc()
+
+    def _hide_vector_gizmo(self):
+        """
+        Hide the 3D vector direction gizmo.
+
+        This is called when user switches away from Custom Vector mode.
+        The gizmo is hidden but not destroyed, so it can be shown again quickly.
+        """
+        if self.vector_ui is not None:
+            self.vector_ui.hide_gizmo()
+            FreeCAD.Console.PrintMessage("Vector gizmo hidden\n")
+
+    def _cleanup_vector_gizmo(self):
+        """
+        Completely remove and destroy the vector gizmo and UI helper.
+
+        This is called when the dialog is closing (accept/cancel/reject).
+        Ensures both the gizmo and UI helper are properly cleaned up.
+        """
+        if self.vector_ui is not None:
+            try:
+                self.vector_ui.cleanup()
+                self.vector_ui = None
+                FreeCAD.Console.PrintMessage("Vector gizmo UI helper cleaned up\n")
+            except Exception as e:
+                FreeCAD.Console.PrintError(f"Error cleaning up vector UI helper: {str(e)}\n")
+        
+        if self.vector_gizmo is not None:
+            try:
+                self.vector_gizmo.cleanup()
+                self.vector_gizmo = None
+                FreeCAD.Console.PrintMessage("Vector gizmo cleaned up\n")
+            except Exception as e:
+                FreeCAD.Console.PrintError(f"Error cleaning up vector gizmo: {str(e)}\n")
+
+    def _get_face_normal_for_vector(self):
+        """
+        Smart default callback for vector gizmo.
+        
+        Returns the face normal if a face is selected, otherwise Z-axis.
+        
+        Returns:
+            FreeCAD.Vector: Face normal or Z-axis default
+        """
+        try:
+            if self.logic.face_object is not None:
+                face_obj = self.logic.face_object[0]
+                face_subname = self.logic.face_object[1]
+                face_shape = face_obj.Shape.getElement(face_subname)
+                u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
+                v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                return face_shape.normalAt(u_mid, v_mid)
+            else:
+                return FreeCAD.Vector(0, 0, 1)  # Z-axis default
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(f"Could not get face normal: {str(e)}\n")
+            return FreeCAD.Vector(0, 0, 1)
+
+    def _on_vector_field_changed(self):
+        """
+        Callback when X/Y/Z input fields change.
+        
+        Updates the projection visualization if it's active when custom vector values change.
+        """
+        # Update projection visualization if it's active and we're in Custom Vector mode
+        if self.direction_custom_radio.isChecked() and self.projection_visualizer_check.isChecked():
+            self._hide_projection_visualizer()
+            self._show_projection_visualizer()
 
     def cleanup_selection(self):
         """Clean up selection observers and gates"""
@@ -454,6 +781,19 @@ class TrimFaceDialogTaskPanel:
     def cleanup(self):
         """Clean up resources"""
         self.cleanup_selection()
+
+        # Clean up vector gizmo (redundant safety check)
+        self._cleanup_vector_gizmo()
+
+        # Clean up projection visualizer
+        self._hide_projection_visualizer()
+
+        # Clean up visualization from coverage checker
+        if hasattr(self, 'logic') and self.logic and hasattr(self.logic, 'coverage_checker'):
+            try:
+                self.logic.coverage_checker.clear_visualization()
+            except:
+                pass
 
     def __del__(self):
         """Destructor"""

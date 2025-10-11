@@ -16,7 +16,7 @@ class CoverageChecker:
 
     def __init__(self):
         self.debug = True  # Enable detailed debug output
-        self.visualize = True  # Enable Coin3D visualization
+        self.visualize = False  # Disable automatic Coin3D visualization (only show when user explicitly enables)
         self.vis_root = None  # Root node for visualization
 
     def clear_visualization(self):

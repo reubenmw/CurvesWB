@@ -273,72 +273,19 @@ class ProjectionVisualizer:
             line_sep.addChild(line_set)
             self.vis_root.addChild(line_sep)
 
-            # Add UV direction arrows to show which way U and V go on the surface
-            try:
-                # Get face center
-                face_center = face_shape.CenterOfMass
-                u_center = (face_u_min + face_u_max) / 2.0
-                v_center = (face_v_min + face_v_max) / 2.0
-
-                # Sample points to show U and V directions
-                u_range = face_u_max - face_u_min
-                v_range = face_v_max - face_v_min
-
-                # U direction arrow (at center V, varying U)
-                u_start = surf.value(u_center, v_center)
-                u_end = surf.value(u_center + u_range * 0.2, v_center)  # 20% of U range
-
-                # V direction arrow (at center U, varying V)
-                v_start = surf.value(u_center, v_center)
-                v_end = surf.value(u_center, v_center + v_range * 0.2)  # 20% of V range
-
-                # Yellow arrow for U direction
-                u_arrow_sep = coin.SoSeparator()
-                u_arrow_mat = coin.SoMaterial()
-                u_arrow_mat.diffuseColor = (1, 1, 0)  # Yellow
-                u_arrow_sep.addChild(u_arrow_mat)
-
-                u_arrow_style = coin.SoDrawStyle()
-                u_arrow_style.lineWidth = 5
-                u_arrow_sep.addChild(u_arrow_style)
-
-                u_arrow_coords = coin.SoCoordinate3()
-                u_arrow_coords.point.setValues(0, 2, [(u_start.x, u_start.y, u_start.z), (u_end.x, u_end.y, u_end.z)])
-                u_arrow_sep.addChild(u_arrow_coords)
-                u_arrow_sep.addChild(coin.SoLineSet())
-                self.vis_root.addChild(u_arrow_sep)
-
-                # Magenta arrow for V direction
-                v_arrow_sep = coin.SoSeparator()
-                v_arrow_mat = coin.SoMaterial()
-                v_arrow_mat.diffuseColor = (1, 0, 1)  # Magenta
-                v_arrow_sep.addChild(v_arrow_mat)
-
-                v_arrow_style = coin.SoDrawStyle()
-                v_arrow_style.lineWidth = 5
-                v_arrow_sep.addChild(v_arrow_style)
-
-                v_arrow_coords = coin.SoCoordinate3()
-                v_arrow_coords.point.setValues(0, 2, [(v_start.x, v_start.y, v_start.z), (v_end.x, v_end.y, v_end.z)])
-                v_arrow_sep.addChild(v_arrow_coords)
-                v_arrow_sep.addChild(coin.SoLineSet())
-                self.vis_root.addChild(v_arrow_sep)
-
-                FreeCAD.Console.PrintMessage("UV direction indicators:\n")
-                FreeCAD.Console.PrintMessage("  - Yellow arrow: U direction (increasing U)\n")
-                FreeCAD.Console.PrintMessage("  - Magenta arrow: V direction (increasing V)\n")
-            except Exception as arrow_error:
-                FreeCAD.Console.PrintWarning(f"Could not create UV arrows: {arrow_error}\n")
+            # Note: UV direction arrows removed as they are intrusive for debug visualization
+            # The user prefers a cleaner debug experience without visual clutter
+            # UV direction information is still available in console output if needed
 
             FreeCAD.Console.PrintMessage("Visualization created:\n")
             FreeCAD.Console.PrintMessage("  - Red points: Curve sample points\n")
             FreeCAD.Console.PrintMessage("  - Green points: Projected points on surface\n")
             FreeCAD.Console.PrintMessage("  - Blue lines: Projection rays\n")
-            FreeCAD.Console.PrintMessage("  - Yellow arrow: U direction\n")
-            FreeCAD.Console.PrintMessage("  - Magenta arrow: V direction\n")
+            FreeCAD.Console.PrintMessage("  - UV direction info: Available in console output\n")
 
-            FreeCADGui.activeDocument().activeView().viewAxonometric()
-            FreeCADGui.SendMsgToActiveView("ViewFit")
+            # Note: Removed automatic camera movement to avoid interfering with user's view
+            # FreeCADGui.activeDocument().activeView().viewAxonometric()
+            # FreeCADGui.SendMsgToActiveView("ViewFit")
 
         except Exception as e:
             FreeCAD.Console.PrintError(f"Error visualizing projection: {str(e)}\n")

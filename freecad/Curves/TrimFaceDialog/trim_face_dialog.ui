@@ -437,6 +437,24 @@ Key UI patterns for novices to understand:
                                 </layout>
                             </widget>
                         </item>
+                        <!-- Projection Visualizer Toggle -->
+                        <item>
+                            <widget class="QCheckBox" name="projectionVisualizerCheck">
+                                <property name="text">
+                                    <string>Show projection visualization (debug)</string>
+                                </property>
+                                <property name="toolTip">
+                                    <string>Visualize how curves project onto the face with colored
+                                        points and lines</string>
+                                </property>
+                                <property name="checked">
+                                    <bool>false</bool>
+                                </property>
+                                <property name="styleSheet">
+                                    <string notr="true">color: #666; font-size: 9pt; padding: 4px;</string>
+                                </property>
+                            </widget>
+                        </item>
                     </layout>
                 </widget>
             </item>
