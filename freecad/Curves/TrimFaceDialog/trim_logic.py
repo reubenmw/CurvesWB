@@ -7,8 +7,46 @@ __doc__ = 'Core business logic for trim face operations'
 
 import FreeCAD
 import Part
+import FreeCADGui
 from .. import curveExtend
 from .coverage_checker import CoverageChecker
+
+
+class ExtendedCurveVP:
+    """View provider for extended curve objects in the hierarchy system"""
+    
+    def __init__(self, vobj):
+        vobj.Proxy = self
+        
+    def attach(self, vobj):
+        self.Object = vobj.Object
+        
+    def claimChildren(self):
+        """Return the original curve nested under this extended curve"""
+        if hasattr(self.Object, 'Group') and self.Object.Group:
+            return self.Object.Group
+        return []
+        
+    def getIcon(self):
+        """Return a distinctive icon for extended curves"""
+        # Could return a custom icon if needed, for now use default
+        return ""
+        
+    if FreeCAD.Version()[0] == '0' and '.'.join(FreeCAD.Version()[1:3]) >= '21.2':
+        def dumps(self):
+            return {"name": self.Object.Name}
+
+        def loads(self, state):
+            self.Object = FreeCAD.ActiveDocument.getObject(state["name"])
+            return None
+
+    else:
+        def __getstate__(self):
+            return {"name": self.Object.Name}
+
+        def __setstate__(self, state):
+            self.Object = FreeCAD.ActiveDocument.getObject(state["name"])
+            return None
 
 
 class TrimFaceLogic:
@@ -207,6 +245,7 @@ class TrimFaceLogic:
     def get_extended_curves(self, parent_obj=None):
         """
         Get the trimming curves, extended according to the extension mode.
+        Implements clean three-level hierarchy: TrimmedFace → Extended → Original
 
         Args:
             parent_obj: Optional parent object to nest extended edges under
@@ -216,10 +255,28 @@ class TrimFaceLogic:
             or original curves if no extension is required.
         """
         if self.extension_mode == 'none' or not self.needs_extension:
-            # No extension needed
+            # No extension needed - create simple hierarchy: TrimmedFace → Original
+            # Still hide originals for clean interface
+            for obj_ref, subname in self.trimming_curves:
+                if hasattr(obj_ref, 'ViewObject'):
+                    obj_ref.ViewObject.Visibility = False
+            
+            # Nest originals under parent if provided
+            if parent_obj is not None:
+                if not hasattr(parent_obj, 'Group'):
+                    parent_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Original curves used")
+                
+                original_curves = [obj_ref for obj_ref, _ in self.trimming_curves]
+                parent_obj.Group = original_curves
+                
+                FreeCAD.Console.PrintMessage(
+                    f"Created simple hierarchy: {parent_obj.Name} → {len(original_curves)} original curve(s)\n"
+                )
+            
             return self.trimming_curves
 
         extended_curves = []
+        extended_objects = []
 
         for obj_ref, subname in self.trimming_curves:
             try:
@@ -238,46 +295,38 @@ class TrimFaceLogic:
                 # Create an extended edge object to replace the original
                 # Name it clearly so user knows it's extended
                 temp_name = f"{obj_ref.Name}_Extended"
-                temp_obj = FreeCAD.ActiveDocument.addObject("Part::Feature", temp_name)
+                temp_obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", temp_name)
                 temp_obj.Shape = extended_edge
 
-                # Style the extended edge (purple/magenta to distinguish)
+                # Apply the extended curve view provider for proper hierarchy display
+                ExtendedCurveVP(temp_obj.ViewObject)
+
+                # Apply distinct visual styling for extended curves
                 if hasattr(temp_obj, 'ViewObject'):
                     temp_obj.ViewObject.LineColor = (0.8, 0.2, 0.8)  # Purple
                     temp_obj.ViewObject.LineWidth = 2.0
-                    # Hide by default - user can expand TrimmedFace to see it
-                    temp_obj.ViewObject.Visibility = False
+                    temp_obj.ViewObject.Visibility = False  # Hidden by default (level 2)
 
                 # Create hierarchical structure:
-                # TrimmedFace → Extended → Original
-                # This preserves the original for reference
-
-                # First, nest original under extended curve
+                # TrimmedFace (level 1, visible) → Extended (level 2, hidden) → Original (level 3, hidden)
+                
+                # Ensure Group property exists on extended object
                 if not hasattr(temp_obj, 'Group'):
                     temp_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Original curve reference")
 
+                # Nest original under extended curve
                 temp_obj.Group = [obj_ref]
 
-                # Hide the original (it's now nested)
+                # Hide the original curve (it's now nested at level 3)
                 if hasattr(obj_ref, 'ViewObject'):
                     obj_ref.ViewObject.Visibility = False
 
-                # Then nest extended under parent object if provided
-                if parent_obj is not None:
-                    # Get or create the Group property on parent
-                    if not hasattr(parent_obj, 'Group'):
-                        parent_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Extended curves used")
-
-                    # Add to parent's group
-                    current_group = list(parent_obj.Group) if hasattr(parent_obj, 'Group') else []
-                    current_group.append(temp_obj)
-                    parent_obj.Group = current_group
-
-                    FreeCAD.Console.PrintMessage(
-                        f"Created hierarchy: {parent_obj.Name} → {temp_name} → {obj_ref.Name}\n"
-                    )
-
+                extended_objects.append(temp_obj)
                 extended_curves.append((temp_obj, 'Edge1'))
+
+                FreeCAD.Console.PrintMessage(
+                    f"Created extended curve: {temp_name} (purple, hidden)\n"
+                )
 
             except Exception as e:
                 FreeCAD.Console.PrintWarning(
@@ -285,6 +334,18 @@ class TrimFaceLogic:
                 )
                 # Fall back to original curve on error
                 extended_curves.append((obj_ref, subname))
+
+        # Nest all extended objects under parent object (level 1)
+        if parent_obj is not None and extended_objects:
+            # Ensure Group property exists on parent object
+            if not hasattr(parent_obj, 'Group'):
+                parent_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Extended curves used")
+
+            parent_obj.Group = extended_objects
+
+            FreeCAD.Console.PrintMessage(
+                f"Created clean hierarchy: {parent_obj.Name} → {len(extended_objects)} extended curve(s) → original curve(s)\n"
+            )
 
         return extended_curves
 

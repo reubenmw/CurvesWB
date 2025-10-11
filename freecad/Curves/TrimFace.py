@@ -148,7 +148,11 @@ class trimFaceVP:
                 children.append(self.Object.Face[0])
         if hasattr(self.Object, "Tool"):
             if self.Object.Tool:
-                children.append(self.Object.Tool[0])
+                # For clean hierarchy system, return all tool objects
+                # These should be the extended curves that contain the originals
+                for tool in self.Object.Tool:
+                    if tool and len(tool) > 0:
+                        children.append(tool[0])
         return children
 
     if FreeCAD.Version()[0] == '0' and '.'.join(FreeCAD.Version()[1:3]) >= '21.2':
@@ -236,6 +240,3 @@ class trim:
 
 
 FreeCADGui.addCommand('Trim', trim())
-
-
-
