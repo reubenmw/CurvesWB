@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-
-__title__ = 'Trim face with dialog'
-__author__ = 'Reuben Thomas'
-__license__ = 'LGPL 2.1'
-__doc__ = 'Trim a face with a projected curve using a fluid NX-style dialog'
-
 import os
 import FreeCAD
 
