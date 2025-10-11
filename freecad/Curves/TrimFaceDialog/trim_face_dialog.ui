@@ -437,6 +437,24 @@ Key UI patterns for novices to understand:
                                 </layout>
                             </widget>
                         </item>
+                        <!-- Transparent Preview Toggle -->
+                        <item>
+                            <widget class="QCheckBox" name="transparentPreviewCheck">
+                                <property name="text">
+                                    <string>Show transparent preview</string>
+                                </property>
+                                <property name="toolTip">
+                                    <string>Show real-time preview of trim areas: green = keep, red
+                                        = remove</string>
+                                </property>
+                                <property name="checked">
+                                    <bool>false</bool>
+                                </property>
+                                <property name="styleSheet">
+                                    <string notr="true">color: #666; font-size: 9pt; padding: 4px;</string>
+                                </property>
+                            </widget>
+                        </item>
                         <!-- Projection Visualizer Toggle -->
                         <item>
                             <widget class="QCheckBox" name="projectionVisualizerCheck">

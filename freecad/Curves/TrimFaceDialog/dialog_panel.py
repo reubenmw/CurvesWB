@@ -20,6 +20,7 @@ from .selection_handlers import (
 )
 from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI
 from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer
+from .preview_overlay import TrimPreviewOverlay
 
 
 class TrimFaceDialogTaskPanel:
@@ -56,6 +57,7 @@ class TrimFaceDialogTaskPanel:
         self.vector_x_edit = self.form.vectorXEdit
         self.vector_y_edit = self.form.vectorYEdit
         self.vector_z_edit = self.form.vectorZEdit
+        self.transparent_preview_check = self.form.transparentPreviewCheck
         self.projection_visualizer_check = self.form.projectionVisualizerCheck
         self.apply_button = self.form.applyButton
         self.cancel_button = self.form.cancelButton
@@ -85,6 +87,9 @@ class TrimFaceDialogTaskPanel:
         self.extension_boundary_radio.toggled.connect(self.on_extension_changed)
         self.extension_custom_radio.toggled.connect(self.on_extension_changed)
 
+        # Transparent preview connection
+        self.transparent_preview_check.toggled.connect(self.on_transparent_preview_changed)
+
         # Projection visualizer connection
         self.projection_visualizer_check.toggled.connect(self.on_projection_visualizer_changed)
 
@@ -98,6 +103,9 @@ class TrimFaceDialogTaskPanel:
 
         # Projection visualizer component
         self.projection_visualizer = None
+
+        # Transparent preview component
+        self.transparent_preview = None
 
         # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
@@ -302,6 +310,11 @@ class TrimFaceDialogTaskPanel:
             self._show_projection_visualizer()
         # Note: Do NOT automatically activate projection visualizer
         # It should only appear when user explicitly checks the checkbox
+        
+        # Update transparent preview if it's active
+        if self.transparent_preview_check.isChecked():
+            self._hide_transparent_preview()
+            self._show_transparent_preview()
 
     def on_extension_changed(self):
         """
@@ -321,6 +334,22 @@ class TrimFaceDialogTaskPanel:
         elif self.extension_custom_radio.isChecked():
             self.logic.set_extension_mode('custom')
             self.extension_distance_edit.setEnabled(True)  # Enable input for custom distance
+
+    def on_transparent_preview_changed(self):
+        """
+        Handle transparent preview checkbox changes.
+        
+        Shows or hides the real-time transparent preview of trim areas
+        based on the current selection and projection direction.
+        """
+        is_checked = self.transparent_preview_check.isChecked()
+        
+        if is_checked:
+            # Show transparent preview
+            self._show_transparent_preview()
+        else:
+            # Hide transparent preview
+            self._hide_transparent_preview()
 
     def on_projection_visualizer_changed(self):
         """
@@ -368,6 +397,44 @@ class TrimFaceDialogTaskPanel:
         except Exception as e:
             FreeCAD.Console.PrintError(f"Failed to show projection visualization: {str(e)}\n")
             self.projection_visualizer_check.setChecked(False)
+
+    def _show_transparent_preview(self):
+        """Show the transparent preview for current trim setup"""
+        try:
+            # Check if we have the required objects
+            if not self.logic.trimming_curves or not self.logic.face_object or not self.logic.trim_point:
+                FreeCAD.Console.PrintWarning("Cannot show transparent preview: missing curves, face, or trim point\n")
+                self.transparent_preview_check.setChecked(False)
+                return
+
+            # Create transparent preview overlay if it doesn't exist
+            if self.transparent_preview is None:
+                self.transparent_preview = TrimPreviewOverlay()
+
+            # Get projection direction
+            projection_dir = self._get_current_projection_direction()
+
+            # Show the preview
+            self.transparent_preview.show_preview(
+                self.logic.face_object,
+                self.logic.trimming_curves,
+                projection_dir
+            )
+
+            FreeCAD.Console.PrintMessage("Transparent preview enabled\n")
+
+        except Exception as e:
+            FreeCAD.Console.PrintError(f"Failed to show transparent preview: {str(e)}\n")
+            self.transparent_preview_check.setChecked(False)
+
+    def _hide_transparent_preview(self):
+        """Hide the transparent preview"""
+        if self.transparent_preview is not None:
+            try:
+                self.transparent_preview.hide_preview()
+                FreeCAD.Console.PrintMessage("Transparent preview disabled\n")
+            except Exception as e:
+                FreeCAD.Console.PrintError(f"Failed to hide transparent preview: {str(e)}\n")
 
     def _hide_projection_visualizer(self):
         """Hide the projection visualization"""
@@ -787,6 +854,9 @@ class TrimFaceDialogTaskPanel:
 
         # Clean up projection visualizer
         self._hide_projection_visualizer()
+
+        # Clean up transparent preview
+        self._hide_transparent_preview()
 
         # Clean up visualization from coverage checker
         if hasattr(self, 'logic') and self.logic and hasattr(self.logic, 'coverage_checker'):
