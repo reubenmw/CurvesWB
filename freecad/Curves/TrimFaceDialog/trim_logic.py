@@ -15,16 +15,21 @@ class TrimFaceLogic:
     """Core logic for trim face operations"""
 
     def __init__(self):
+        # Object Properties (State Management)
+        # Like React state, but stored on 'self' instead of useState()
         self.trimming_curves = []
         self.face_object = None
         self.direction = None
         self.trim_point = None
         self.use_auto_direction = True
-        # Extension settings
+        
+        # Extension settings - Phase 1: Detection and User Preference Capture
+        # These properties store user choices for how to handle short curves
         self.extension_mode = 'boundary'  # 'none', 'boundary', 'custom'
-        self.extension_distance = 10.0  # mm for custom mode
-        self.needs_extension = False
-        # Coverage checker
+        self.extension_distance = 10.0    # mm for custom mode
+        self.needs_extension = False      # Boolean flag set by detection
+        
+        # Coverage checker - handles the geometry analysis
         self.coverage_checker = CoverageChecker()
 
     def add_trimming_curve(self, obj, subname):
@@ -50,24 +55,44 @@ class TrimFaceLogic:
         self.use_auto_direction = use_auto
 
     def set_extension_mode(self, mode):
-        """Set extension mode: 'none', 'boundary', or 'custom'"""
+        """
+        Set extension mode: 'none', 'boundary', or 'custom'
+        
+        This is like a state setter in React - it validates input before updating.
+        The tuple check ('none', 'boundary', 'custom') is like array.includes() in JS.
+        """
         if mode in ('none', 'boundary', 'custom'):
             self.extension_mode = mode
         else:
             FreeCAD.Console.PrintWarning(f"Invalid extension mode: {mode}\n")
 
     def set_extension_distance(self, distance):
-        """Set custom extension distance in mm"""
+        """
+        Set custom extension distance in mm
+        
+        Validation and Error Handling Pattern:
+        Always validate user input before using it. If invalid, provide a fallback.
+        This prevents crashes and gives the user a reasonable default.
+        """
         try:
             self.extension_distance = float(distance)
         except (ValueError, TypeError):
             FreeCAD.Console.PrintWarning(f"Invalid extension distance: {distance}\n")
-            self.extension_distance = 10.0
+            self.extension_distance = 10.0  # Fallback to safe default
 
     def check_curve_coverage(self, projection_direction=None):
         """
         Check if trimming curves fully cover the face when projected.
         Returns True if extension is needed, False otherwise.
+
+        This is the key detection method for Phase 1 of the Automatic Curve Extension.
+        It determines whether the UI should show extension controls to the user.
+
+        How it works (delegated to CoverageChecker):
+        1. Get bounding boxes for face and each edge
+        2. Calculate diagonal lengths (3D size measurement)
+        3. Compare: if edge < 80% of face diagonal, needs extension
+        4. Return True to show extension controls, False to hide them
 
         Args:
             projection_direction: FreeCAD.Vector or None. If None, uses face normal.
