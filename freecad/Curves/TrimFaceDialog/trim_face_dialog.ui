@@ -309,7 +309,7 @@ Key UI patterns for novices to understand:
             <item>
                 <widget class="QGroupBox" name="pointGroup">
                     <property name="title">
-                        <string>Point to Keep</string>
+                        <string>Point to Delete</string>
                     </property>
                     <layout class="QVBoxLayout" name="verticalLayout_4">
                         <item>
@@ -444,11 +444,10 @@ Key UI patterns for novices to understand:
                                     <string>Show transparent preview</string>
                                 </property>
                                 <property name="toolTip">
-                                    <string>Show real-time preview of trim areas: green = keep, red
-                                        = remove</string>
+                                    <string>Show real-time preview of the area to be deleted (red overlay)</string>
                                 </property>
                                 <property name="checked">
-                                    <bool>false</bool>
+                                    <bool>true</bool>
                                 </property>
                                 <property name="styleSheet">
                                     <string notr="true">color: #666; font-size: 9pt; padding: 4px;</string>

@@ -12,6 +12,13 @@ import time
 from pivy import coin
 from .. import CoinNodes
 
+try:
+    import BOPTools.SplitAPI
+    splitAPI = BOPTools.SplitAPI
+except ImportError:
+    FreeCAD.Console.PrintError("Failed importing BOPTools. Fallback to Part API\n")
+    splitAPI = Part.BOPTools.SplitAPI
+
 
 class TrimPreviewOverlay:
     """
@@ -31,60 +38,79 @@ class TrimPreviewOverlay:
         self.remove_coordinates = None
         self.keep_faces = None
         self.remove_faces = None
-        
+
         # Performance caching
         self._last_calculation_time = 0.0
         self._last_face_hash = None
         self._last_curves_hash = None
         self._cached_keep_mesh = None
         self._cached_remove_mesh = None
-        
+        self._cached_split_faces = None  # Cache split faces for hover detection
+        self._last_face_shape = None  # Cache face shape for UV calculations
+
         # Preview state
         self.is_active = False
         self.scene_graph_added = False
-        
+        self.hover_mode = True  # New: show preview only on hover
+
         # Preview colors with transparency
-        self.keep_color = (0.0, 0.8, 0.0)  # Green
+        self.keep_color = (0.0, 0.8, 0.0)  # Green (not used in hover mode)
         self.remove_color = (0.8, 0.0, 0.0)  # Red
         self.transparency = 0.7  # 70% transparent
-        
+
         # Performance requirements
         self.max_response_time = 0.1  # 100ms max response time
+
+        # Hover state
+        self.current_hover_point = None
+        self.face_object_ref = None
+        self.trimming_curves_ref = None
+        self.projection_direction_ref = None
         
-    def show_preview(self, face_object, trimming_curves, projection_direction=None):
+    def show_preview(self, face_object, trimming_curves, projection_direction=None, trim_point=None):
         """
         Show the transparent preview overlay.
-        
+
         Args:
             face_object: Tuple of (obj, subname) for the target face
             trimming_curves: List of (obj, subname) tuples for trimming curves
             projection_direction: FreeCAD.Vector or None for auto direction
+            trim_point: FreeCAD.Vector point to determine which region to delete (new UX)
         """
         try:
             start_time = time.time()
             
             # Check if we can use cached results
-            if self._can_use_cache(face_object, trimming_curves, projection_direction):
-                self._show_cached_preview()
-                return
+            # NOTE: Don't use cache during hover mode - trim_point changes constantly
+            # if self._can_use_cache(face_object, trimming_curves, projection_direction):
+            #     self._show_cached_preview()
+            #     return
             
-            # Calculate preview mesh
+            # Calculate preview mesh (pass trim_point for intelligent region selection)
             keep_mesh, remove_mesh = self._calculate_trim_preview(
-                face_object, trimming_curves, projection_direction
+                face_object, trimming_curves, projection_direction, trim_point
             )
             
             if not keep_mesh and not remove_mesh:
                 FreeCAD.Console.PrintWarning("No preview geometry generated\n")
+                # Hide preview if no geometry
+                if self.scene_graph_added:
+                    self._remove_from_scene()
                 return
-            
-            # Create or update scene graph
+
+            # Force clean rebuild to avoid mesh artifacts
+            # Remove old scene graph if it exists
+            if self.scene_graph_added:
+                self._remove_from_scene()
+
+            # Clear scene graph and recreate
+            self._clear_scene_graph()
             self._ensure_scene_graph()
             self._update_preview_mesh(keep_mesh, remove_mesh)
-            
-            # Add to scene if not already added
-            if not self.scene_graph_added:
-                self._add_to_scene()
-            
+
+            # Add fresh scene graph to scene
+            self._add_to_scene()
+
             self.is_active = True
             
             # Cache the results
@@ -112,64 +138,84 @@ class TrimPreviewOverlay:
         self._clear_scene_graph()
         self._clear_cache()
     
-    def _calculate_trim_preview(self, face_object, trimming_curves, projection_direction):
+    def _calculate_trim_preview(self, face_object, trimming_curves, projection_direction, trim_point=None):
         """
-        Non-destructive calculation of trim preview areas.
-        
-        This method performs the actual geometry analysis to determine
-        which parts of the face will be kept and which will be removed.
-        
+        Calculate trim preview showing only the delete (red) region.
+
+        NEW UX: Only show red overlay on the region that will be DELETED.
+        The region to delete is determined by the trim_point - the region containing
+        the point will be deleted.
+
         Args:
             face_object: Tuple of (obj, subname) for the target face
             trimming_curves: List of (obj, subname) tuples for trimming curves
             projection_direction: FreeCAD.Vector or None for auto direction
-            
+            trim_point: FreeCAD.Vector to determine which region to delete
+
         Returns:
-            Tuple of (keep_mesh, remove_mesh) where each is a list of points
+            Tuple of (keep_mesh, remove_mesh) where keep_mesh is None (new UX)
         """
         try:
             # Get face shape
             face_obj, face_subname = face_object
             face_shape = face_obj.Shape.getElement(face_subname)
-            
+
             if not isinstance(face_shape, Part.Face):
                 return [], []
-            
-            # Determine projection direction
+
+            # If no trimming curves, show whole face as "keep"
+            if not trimming_curves:
+                keep_mesh = self._mesh_face_region(face_shape)
+                return keep_mesh, []
+
+            # Determine projection direction if not provided
             if projection_direction is None:
-                # Use face normal at center
-                center = face_shape.CenterOfMass
-                uv = face_shape.Surface.parameter(center)
-                projection_direction = face_shape.normalAt(uv[0], uv[1])
-            
-            # Ensure direction is normalized
-            if projection_direction.Length > 1e-6:
-                projection_direction.normalize()
-            else:
-                projection_direction = FreeCAD.Vector(0, 0, 1)
-            
-            # Project trimming curves onto face
-            projected_curves = self._project_curves_onto_face(
-                trimming_curves, face_shape, projection_direction
+                try:
+                    u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
+                    v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                    projection_direction = face_shape.normalAt(u_mid, v_mid)
+                except:
+                    projection_direction = FreeCAD.Vector(0, 0, 1)
+
+            # Get original edges (not projected) - same as TrimFace
+            original_edges = []
+            for curve_obj, curve_subname in trimming_curves:
+                edge_shape = curve_obj.Shape.getElement(curve_subname)
+                if isinstance(edge_shape, Part.Edge):
+                    original_edges.append(edge_shape)
+
+            if not original_edges:
+                FreeCAD.Console.PrintWarning("No valid edges found\n")
+                keep_mesh = self._mesh_face_region(face_shape)
+                return keep_mesh, []
+
+            # Create wires from sorted edges (same as TrimFace)
+            wires = [Part.Wire(el) for el in Part.sortEdges(original_edges)]
+
+            # Try to split the face using original wires (not projected)
+            keep_face, remove_face = self._create_trim_regions(
+                face_shape, wires, projection_direction, trim_point
             )
-            
-            if not projected_curves:
-                return [], []
-            
-            # Create trim regions using boolean operations
-            keep_region, remove_region = self._create_trim_regions(
-                face_shape, projected_curves
-            )
-            
-            # Generate mesh points for visualization
-            keep_mesh = self._mesh_face_region(keep_region) if keep_region else []
-            remove_mesh = self._mesh_face_region(remove_region) if remove_region else []
-            
+
+            # Generate meshes for visualization
+            # IMPORTANT: Always regenerate meshes, don't use cached mesh when face changes
+            keep_mesh = self._mesh_face_region(keep_face) if keep_face else []
+            remove_mesh = self._mesh_face_region(remove_face) if remove_face else []
+
             return keep_mesh, remove_mesh
-            
+
         except Exception as e:
             FreeCAD.Console.PrintError(f"Preview calculation failed: {str(e)}\n")
-            return [], []
+            import traceback
+            traceback.print_exc()
+            # Fallback: show original face as "keep"
+            try:
+                face_obj, face_subname = face_object
+                face_shape = face_obj.Shape.getElement(face_subname)
+                keep_mesh = self._mesh_face_region(face_shape)
+                return keep_mesh, []
+            except:
+                return [], []
     
     def _project_curves_onto_face(self, trimming_curves, face_shape, projection_direction):
         """
@@ -193,9 +239,14 @@ class TrimPreviewOverlay:
                     continue
                 
                 # Project edge onto face
-                projection_result = face_shape.project([edge_shape], projection_direction)
+                projection_result = face_shape.project([edge_shape])
                 
-                if projection_result and len(projection_result) > 0:
+                # Handle both single shape and list results
+                if projection_result:
+                    # Ensure we have a list to work with
+                    if isinstance(projection_result, Part.Shape):
+                        projection_result = [projection_result]
+                    
                     # Get the projected edges and create wires
                     projected_edges = []
                     for proj_shape in projection_result:
@@ -222,94 +273,182 @@ class TrimPreviewOverlay:
             FreeCAD.Console.PrintError(f"Curve projection failed: {str(e)}\n")
             return []
     
-    def _create_trim_regions(self, face_shape, projected_curves):
+    def _create_trim_regions(self, face_shape, wires, projection_direction, trim_point=None):
         """
-        Create keep and remove regions using boolean operations.
-        
+        Create keep and remove regions by splitting the face with wires.
+
+        Uses EXACTLY the same algorithm as TrimFace: takes original wires,
+        translates and extrudes them to create cutting tools, then slices the face.
+
+        NEW UX: Uses trim_point to determine which region to DELETE (show in red).
+        The face containing the trim_point will be marked as the delete region.
+
         Args:
             face_shape: Part.Face to trim
-            projected_curves: List of Part.Wire objects
-            
+            wires: List of Part.Wire objects (original, not projected)
+            projection_direction: FreeCAD.Vector for projection/extrusion direction
+            trim_point: FreeCAD.Vector to determine which region to delete
+
         Returns:
-            Tuple of (keep_face, remove_face) Part.Face objects
+            Tuple of (keep_face, remove_face) where keep_face is None (new UX)
         """
         try:
-            if not projected_curves:
+            if not wires:
                 return face_shape, None
-            
-            # Create a compound face from all projected curves
-            # This represents the area that will be removed
-            trim_faces = []
-            for wire in projected_curves:
+
+            # Normalize projection direction
+            v = projection_direction.normalize()
+
+            # Calculate extrusion distance - EXACTLY as TrimFace does
+            union = Part.Compound(wires + [face_shape])
+            d = 2 * union.BoundBox.DiagonalLength
+
+            # Create cutting tools - EXACTLY as TrimFace does
+            cuttool = []
+            for i, w in enumerate(wires):
                 try:
-                    # Create a face from the wire if it's closed
-                    if wire.isClosed():
-                        face = Part.Face(wire)
-                        if face.isValid():
-                            trim_faces.append(face)
-                except:
-                    continue
-            
-            if not trim_faces:
+                    # Translate and extrude - EXACTLY as TrimFace
+                    w.translate(v * d)
+                    tool = w.extrude(-v * d * 2)
+                    cuttool.append(tool)
+                except Exception as e:
+                    FreeCAD.Console.PrintWarning(f"Failed to create cutting tool {i}: {str(e)}\n")
+
+            if not cuttool:
+                FreeCAD.Console.PrintWarning("No valid cutting tools created\n")
                 return face_shape, None
-            
-            # Combine all trim faces
-            if len(trim_faces) == 1:
-                trim_region = trim_faces[0]
-            else:
-                # Fuse all trim faces together
-                trim_region = trim_faces[0].fuse(*trim_faces[1:])
-            
-            # Perform boolean operation to determine keep/remove regions
-            # The intersection of face and trim_region is what gets removed
+
+            # Slice the face - EXACTLY as TrimFace does
             try:
-                # Find the intersection (area to remove)
-                intersection = face_shape.common(trim_region)
-                
-                # Find the difference (area to keep)
-                difference = face_shape.cut(trim_region)
-                
-                return difference, intersection
-                
-            except Exception as e:
-                FreeCAD.Console.PrintWarning(f"Boolean operation failed: {str(e)}\n")
+                # Check if we can use cached split faces
+                use_cached = (self._cached_split_faces is not None and
+                             self._last_face_shape is face_shape)
+
+                if use_cached:
+                    bf = self._cached_split_faces
+                else:
+                    bf = splitAPI.slice(face_shape, cuttool, "Split", 1e-6)
+                    # Cache the split result for next hover
+                    self._cached_split_faces = bf
+                    self._last_face_shape = face_shape
+
+                if bf and hasattr(bf, 'Faces') and len(bf.Faces) > 1:
+                    # Successfully split!
+
+                    # NEW UX: No green overlay, only show red for area to be deleted
+                    # Use trim_point to determine which face to delete (same logic as TrimFace)
+                    remove_face = None
+
+                    if trim_point:
+                        try:
+                            # Convert 3D point to UV parameters on face
+                            u, v = face_shape.Surface.parameter(trim_point)
+
+                            # Find which face contains this point - that's the one to DELETE
+                            found_face = False
+                            for i, f in enumerate(bf.Faces):
+                                if f.isPartOfDomain(u, v):
+                                    remove_face = f
+                                    found_face = True
+                                    break
+
+                            # If no face contains the point, don't show anything
+                            if not found_face:
+                                return None, None
+
+                        except Exception as e:
+                            FreeCAD.Console.PrintWarning(f"Could not determine face from trim point: {e}\n")
+                            return None, None
+                    else:
+                        # No trim point - show first face as delete region
+                        remove_face = bf.Faces[0]
+
+                    # Don't show green overlay
+                    keep_face = None
+
+                    return keep_face, remove_face
+                else:
+                    FreeCAD.Console.PrintWarning(f"Face splitting produced no split (only {len(bf.Faces)} face(s))\n")
+                    return None, None
+
+            except Exception as split_error:
+                FreeCAD.Console.PrintWarning(f"BOPTools split failed: {str(split_error)}\n")
+                import traceback
+                traceback.print_exc()
                 return face_shape, None
-                
+
         except Exception as e:
             FreeCAD.Console.PrintError(f"Region creation failed: {str(e)}\n")
+            import traceback
+            traceback.print_exc()
             return face_shape, None
     
     def _mesh_face_region(self, face_region):
         """
-        Generate mesh points from a face region for visualization.
-        
+        Generate mesh points and triangles from a face region for visualization.
+
+        Uses FreeCAD's tessellation to create a triangulated mesh representation
+        of the face suitable for rendering with Coin3D.
+
         Args:
             face_region: Part.Face object or None
-            
+
         Returns:
-            List of 3D points as tuples
+            Tuple of (points, triangles) where:
+            - points is a list of 3D coordinate tuples
+            - triangles is a list of triangle index tuples
         """
-        if not face_region or not hasattr(face_region, ' tessellate'):
+        if not face_region:
             return []
-        
+
+        # Handle both single faces and compounds of faces
+        faces_to_mesh = []
+        if hasattr(face_region, 'Faces'):
+            faces_to_mesh = face_region.Faces
+        elif hasattr(face_region, 'tessellate'):
+            faces_to_mesh = [face_region]
+        else:
+            return []
+
         try:
-            # Use tessellation to generate mesh
-            mesh_points = []
-            
-            # Get tessellated points
-            tessellation = face_region.tessellate(0.1)  # 0.1mm tolerance
-            
-            if tessellation and len(tessellation) >= 2:
-                points, triangles = tessellation
-                
-                # Convert FreeCAD vectors to tuples
-                for point in points:
-                    mesh_points.append((point.x, point.y, point.z))
-            
-            return mesh_points
-            
+            all_points = []
+            all_triangles = []
+            point_offset = 0
+
+            for face in faces_to_mesh:
+                if not hasattr(face, 'tessellate'):
+                    continue
+
+                # Get tessellated mesh data
+                # Returns (vertices, triangles) where:
+                # - vertices is a list of FreeCAD.Vector
+                # - triangles is a list of (i1, i2, i3) index tuples
+                tessellation = face.tessellate(0.5)  # 0.5mm tolerance for performance
+
+                if tessellation and len(tessellation) >= 2:
+                    points, triangles = tessellation
+
+                    # Convert FreeCAD vectors to tuples
+                    for point in points:
+                        all_points.append((point.x, point.y, point.z))
+
+                    # Adjust triangle indices for offset and add to list
+                    for tri in triangles:
+                        adjusted_tri = (
+                            tri[0] + point_offset,
+                            tri[1] + point_offset,
+                            tri[2] + point_offset
+                        )
+                        all_triangles.append(adjusted_tri)
+
+                    point_offset += len(points)
+
+            return (all_points, all_triangles)
+
         except Exception as e:
             FreeCAD.Console.PrintWarning(f"Mesh generation failed: {str(e)}\n")
+            import traceback
+            traceback.print_exc()
             return []
     
     def _ensure_scene_graph(self):
@@ -331,50 +470,140 @@ class TrimPreviewOverlay:
             self.keep_coordinates = coin.SoCoordinate3()
             self.remove_coordinates = coin.SoCoordinate3()
             
-            # Create face set nodes
-            self.keep_faces = coin.SoFaceSet()
-            self.remove_faces = coin.SoFaceSet()
+            # Create indexed face set nodes (for triangle rendering)
+            self.keep_faces = coin.SoIndexedFaceSet()
+            self.remove_faces = coin.SoIndexedFaceSet()
             
             # Build scene graph structure
             # Keep region (green)
             keep_separator = coin.SoSeparator()
+
+            # Add draw style for proper rendering
+            keep_draw_style = coin.SoDrawStyle()
+            keep_draw_style.style = coin.SoDrawStyle.FILLED
+
+            # Disable back-face culling to see faces from both sides
+            keep_shape_hints = coin.SoShapeHints()
+            keep_shape_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+            keep_shape_hints.shapeType = coin.SoShapeHints.UNKNOWN_SHAPE_TYPE
+
+            # Add polygon offset to render on top of existing geometry
+            # Very strong offset values to prevent z-fighting/clipping during hover
+            keep_polygon_offset = coin.SoPolygonOffset()
+            keep_polygon_offset.factor.setValue(-50.0)
+            keep_polygon_offset.units.setValue(-50.0)
+
+            # Alternative approach: use complexity to force rendering on top
+            keep_complexity = coin.SoComplexity()
+            keep_complexity.value.setValue(0.8)
+
+            keep_separator.addChild(keep_draw_style)
+            keep_separator.addChild(keep_shape_hints)
+            keep_separator.addChild(keep_polygon_offset)
+            keep_separator.addChild(keep_complexity)
             keep_separator.addChild(self.keep_material)
             keep_separator.addChild(self.keep_coordinates)
             keep_separator.addChild(self.keep_faces)
-            
+
             # Remove region (red)
             remove_separator = coin.SoSeparator()
+
+            # Add draw style for proper rendering
+            remove_draw_style = coin.SoDrawStyle()
+            remove_draw_style.style = coin.SoDrawStyle.FILLED
+
+            # Disable back-face culling to see faces from both sides
+            remove_shape_hints = coin.SoShapeHints()
+            remove_shape_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+            remove_shape_hints.shapeType = coin.SoShapeHints.UNKNOWN_SHAPE_TYPE
+
+            # Add polygon offset to render on top of existing geometry
+            # Very strong offset values to prevent z-fighting/clipping during hover
+            remove_polygon_offset = coin.SoPolygonOffset()
+            remove_polygon_offset.factor.setValue(-50.0)
+            remove_polygon_offset.units.setValue(-50.0)
+
+            # Alternative approach: use complexity to force rendering on top
+            remove_complexity = coin.SoComplexity()
+            remove_complexity.value.setValue(0.8)
+
+            remove_separator.addChild(remove_draw_style)
+            remove_separator.addChild(remove_shape_hints)
+            remove_separator.addChild(remove_polygon_offset)
+            remove_separator.addChild(remove_complexity)
             remove_separator.addChild(self.remove_material)
             remove_separator.addChild(self.remove_coordinates)
             remove_separator.addChild(self.remove_faces)
-            
+
             # Add both to root
             self.root_separator.addChild(keep_separator)
             self.root_separator.addChild(remove_separator)
     
     def _update_preview_mesh(self, keep_mesh, remove_mesh):
-        """Update the preview mesh in the scene graph."""
-        if self.keep_coordinates and keep_mesh:
-            # Convert points to coin format
-            coin_points = [coin.SbVec3f(*point) for point in keep_mesh]
-            self.keep_coordinates.point.setValues(0, len(coin_points), coin_points)
-            
-            # Set face indices (simple triangulation)
-            if len(coin_points) >= 3:
-                indices = list(range(len(coin_points)))
-                indices.append(-1)  # End of face
-                self.keep_faces.coordIndex.setValues(0, len(indices), indices)
-        
-        if self.remove_coordinates and remove_mesh:
-            # Convert points to coin format
-            coin_points = [coin.SbVec3f(*point) for point in remove_mesh]
-            self.remove_coordinates.point.setValues(0, len(coin_points), coin_points)
-            
-            # Set face indices
-            if len(coin_points) >= 3:
-                indices = list(range(len(coin_points)))
-                indices.append(-1)  # End of face
-                self.remove_faces.coordIndex.setValues(0, len(indices), indices)
+        """
+        Update the preview mesh in the scene graph.
+
+        This method takes the tessellated mesh data and converts it to Coin3D
+        scene graph nodes for rendering.
+
+        Args:
+            keep_mesh: Tuple of (points, triangles) for the keep region
+            remove_mesh: Tuple of (points, triangles) for the remove region
+        """
+        # Update keep region (green) - clear if no mesh
+        if self.keep_coordinates:
+            if keep_mesh and isinstance(keep_mesh, tuple) and len(keep_mesh) == 2:
+                points, triangles = keep_mesh
+
+                if points and triangles:
+                    # Convert points to Coin3D format
+                    coin_points = [coin.SbVec3f(*point) for point in points]
+                    self.keep_coordinates.point.setValues(0, len(coin_points), coin_points)
+
+                    # Convert triangles to coordIndex format
+                    # Coin3D expects: i1, i2, i3, -1, i4, i5, i6, -1, ...
+                    indices = []
+                    for tri in triangles:
+                        indices.extend([tri[0], tri[1], tri[2], -1])
+
+                    self.keep_faces.coordIndex.setValues(0, len(indices), indices)
+
+                    pass  # Mesh updated successfully
+                else:
+                    # Clear mesh - use deleteValues to properly remove
+                    self.keep_coordinates.point.deleteValues(0)
+                    self.keep_faces.coordIndex.deleteValues(0)
+            else:
+                # Clear mesh - use deleteValues to properly remove
+                self.keep_coordinates.point.deleteValues(0)
+                self.keep_faces.coordIndex.deleteValues(0)
+
+        # Update remove region (red) - clear if no mesh
+        if self.remove_coordinates:
+            if remove_mesh and isinstance(remove_mesh, tuple) and len(remove_mesh) == 2:
+                points, triangles = remove_mesh
+
+                if points and triangles:
+                    # Convert points to Coin3D format
+                    coin_points = [coin.SbVec3f(*point) for point in points]
+                    self.remove_coordinates.point.setValues(0, len(coin_points), coin_points)
+
+                    # Convert triangles to coordIndex format
+                    indices = []
+                    for tri in triangles:
+                        indices.extend([tri[0], tri[1], tri[2], -1])
+
+                    self.remove_faces.coordIndex.setValues(0, len(indices), indices)
+
+                    pass  # Mesh updated successfully
+                else:
+                    # Clear mesh - use deleteValues to properly remove
+                    self.remove_coordinates.point.deleteValues(0)
+                    self.remove_faces.coordIndex.deleteValues(0)
+            else:
+                # Clear mesh - use deleteValues to properly remove
+                self.remove_coordinates.point.deleteValues(0)
+                self.remove_faces.coordIndex.deleteValues(0)
     
     def _add_to_scene(self):
         """Add the preview overlay to the FreeCAD scene graph."""

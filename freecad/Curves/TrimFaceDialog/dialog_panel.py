@@ -16,7 +16,8 @@ from .selection_handlers import (
     SelectionGate,
     EdgeSelectionObserver,
     FaceSelectionObserver,
-    PointSelectionObserver
+    PointSelectionObserver,
+    HoverPointCallback
 )
 from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI
 from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer
@@ -106,6 +107,9 @@ class TrimFaceDialogTaskPanel:
 
         # Transparent preview component
         self.transparent_preview = None
+
+        # Hover callback for real-time preview during point selection
+        self.hover_callback = None
 
         # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
@@ -228,13 +232,18 @@ class TrimFaceDialogTaskPanel:
     def start_point_selection(self):
         """Start point selection mode"""
         self.workflow_stage = 'point'
-        self.update_status("Click on the face to select the area to keep")
+        self.update_status("Hover over the face to preview - Click to select area to DELETE")
         self.update_apply_button()
 
         FreeCADGui.Selection.clearSelection()
 
         self.selection_observer = PointSelectionObserver(self)
         FreeCADGui.Selection.addObserver(self.selection_observer)
+
+        # Install hover callback for real-time preview
+        if self.transparent_preview_check.isChecked():
+            self.hover_callback = HoverPointCallback(self)
+            self.hover_callback.install()
 
     def check_picked_point(self):
         """Check if a picked point is available"""
@@ -275,6 +284,11 @@ class TrimFaceDialogTaskPanel:
         if self.selection_observer:
             FreeCADGui.Selection.removeObserver(self.selection_observer)
             self.selection_observer = None
+
+        # Remove hover callback if active
+        if self.hover_callback:
+            self.hover_callback.remove()
+            self.hover_callback = None
 
     def update_status(self, message):
         """Update status label"""
@@ -338,18 +352,29 @@ class TrimFaceDialogTaskPanel:
     def on_transparent_preview_changed(self):
         """
         Handle transparent preview checkbox changes.
-        
+
         Shows or hides the real-time transparent preview of trim areas
         based on the current selection and projection direction.
         """
         is_checked = self.transparent_preview_check.isChecked()
-        
+
         if is_checked:
             # Show transparent preview
             self._show_transparent_preview()
+
+            # If we're in point selection mode, install hover callback
+            if self.workflow_stage == 'point':
+                if self.hover_callback is None:
+                    self.hover_callback = HoverPointCallback(self)
+                    self.hover_callback.install()
         else:
             # Hide transparent preview
             self._hide_transparent_preview()
+
+            # Remove hover callback if active
+            if self.hover_callback:
+                self.hover_callback.remove()
+                self.hover_callback = None
 
     def on_projection_visualizer_changed(self):
         """
@@ -414,11 +439,12 @@ class TrimFaceDialogTaskPanel:
             # Get projection direction
             projection_dir = self._get_current_projection_direction()
 
-            # Show the preview
+            # Show the preview (with trim_point to determine delete region)
             self.transparent_preview.show_preview(
                 self.logic.face_object,
                 self.logic.trimming_curves,
-                projection_dir
+                projection_dir,
+                self.logic.trim_point  # Pass trim_point for intelligent region selection
             )
 
             FreeCAD.Console.PrintMessage("Transparent preview enabled\n")
@@ -435,6 +461,40 @@ class TrimFaceDialogTaskPanel:
                 FreeCAD.Console.PrintMessage("Transparent preview disabled\n")
             except Exception as e:
                 FreeCAD.Console.PrintError(f"Failed to hide transparent preview: {str(e)}\n")
+
+    def update_hover_preview(self, hover_point):
+        """
+        Update the transparent preview based on hover point.
+
+        Called during point selection when user hovers over the face.
+        Shows which region will be deleted in real-time.
+
+        Args:
+            hover_point: FreeCAD.Vector of the hover position
+        """
+        try:
+            # Only update if we have the required objects
+            if not self.logic.trimming_curves or not self.logic.face_object:
+                return
+
+            # Create transparent preview overlay if it doesn't exist
+            if self.transparent_preview is None:
+                self.transparent_preview = TrimPreviewOverlay()
+
+            # Get projection direction
+            projection_dir = self._get_current_projection_direction()
+
+            # Show the preview with the hover point
+            self.transparent_preview.show_preview(
+                self.logic.face_object,
+                self.logic.trimming_curves,
+                projection_dir,
+                hover_point  # Use hover point to determine delete region
+            )
+
+        except Exception as e:
+            # Silently ignore errors during hover to avoid console spam
+            pass
 
     def _hide_projection_visualizer(self):
         """Hide the projection visualization"""
@@ -630,8 +690,13 @@ class TrimFaceDialogTaskPanel:
 
             self.logic.execute_trim()
 
-            # Clean up gizmo BEFORE closing dialog
+            # Clean up all visualizations BEFORE closing dialog
             self._cleanup_vector_gizmo()
+            self._hide_transparent_preview()
+            self._hide_projection_visualizer()
+            if self.hover_callback:
+                self.hover_callback.remove()
+                self.hover_callback = None
 
             FreeCADGui.Control.closeDialog()
         except Exception as e:
@@ -641,8 +706,13 @@ class TrimFaceDialogTaskPanel:
 
     def on_cancel(self):
         """Cancel and close dialog"""
-        # Clean up gizmo BEFORE closing dialog
+        # Clean up all visualizations BEFORE closing dialog
         self._cleanup_vector_gizmo()
+        self._hide_transparent_preview()
+        self._hide_projection_visualizer()
+        if self.hover_callback:
+            self.hover_callback.remove()
+            self.hover_callback = None
         FreeCADGui.Control.closeDialog()
 
     def accept(self):
@@ -855,8 +925,19 @@ class TrimFaceDialogTaskPanel:
         # Clean up projection visualizer
         self._hide_projection_visualizer()
 
-        # Clean up transparent preview
+        # Clean up transparent preview completely
         self._hide_transparent_preview()
+        if self.transparent_preview is not None:
+            try:
+                self.transparent_preview.cleanup()
+                self.transparent_preview = None
+            except Exception as e:
+                FreeCAD.Console.PrintWarning(f"Error cleaning up transparent preview: {str(e)}\n")
+
+        # Clean up hover callback
+        if self.hover_callback:
+            self.hover_callback.remove()
+            self.hover_callback = None
 
         # Clean up visualization from coverage checker
         if hasattr(self, 'logic') and self.logic and hasattr(self.logic, 'coverage_checker'):
