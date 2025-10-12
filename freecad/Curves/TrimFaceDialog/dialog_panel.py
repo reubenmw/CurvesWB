@@ -23,6 +23,9 @@ from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI
 from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer
 from .preview_overlay import TrimPreviewOverlay
 
+# Translation function
+translate = FreeCAD.Qt.translate
+
 
 class TrimFaceDialogTaskPanel:
     """Fluid NX-style dialog for trim face"""
@@ -144,7 +147,7 @@ class TrimFaceDialogTaskPanel:
     def start_edge_selection(self):
         """Start edge selection mode"""
         self.workflow_stage = 'edges'
-        self.update_status("Select trimming edges (Ctrl/Shift for multiple)")
+        self.update_status(translate('TrimFaceDialog', 'Select trimming edges (Ctrl/Shift for multiple)'))
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.removeSelectionGate()
@@ -159,7 +162,7 @@ class TrimFaceDialogTaskPanel:
         self.logic.add_trimming_curve(obj, subname)
         display_name = f"{obj.Name}.{subname}"
         self.curve_list.addItem(display_name)
-        self.update_status(f"{self.curve_list.count()} edge(s) selected")
+        self.update_status(translate('TrimFaceDialog', '{0} edge(s) selected').format(self.curve_list.count()))
 
         modifiers = QtGui.QApplication.keyboardModifiers()
         multi_select = bool(modifiers & (Qt.ControlModifier | Qt.ShiftModifier))
@@ -184,7 +187,7 @@ class TrimFaceDialogTaskPanel:
     def start_face_selection(self):
         """Start face selection mode"""
         self.workflow_stage = 'face'
-        self.update_status("Click on the face to trim")
+        self.update_status(translate('TrimFaceDialog', 'Click on the face to trim'))
         self.update_apply_button()
 
         FreeCADGui.Selection.clearSelection()
@@ -232,7 +235,7 @@ class TrimFaceDialogTaskPanel:
     def start_point_selection(self):
         """Start point selection mode"""
         self.workflow_stage = 'point'
-        self.update_status("Hover over the face to preview - Click to select area to DELETE")
+        self.update_status(translate('TrimFaceDialog', 'Hover over the face to preview - Click to select area to DELETE'))
         self.update_apply_button()
 
         FreeCADGui.Selection.clearSelection()
@@ -263,19 +266,19 @@ class TrimFaceDialogTaskPanel:
                         u, v = face_shape.Surface.parameter(picked_3d)
                         self.logic.set_trim_point(picked_3d)
 
-                        self.point_label.setText(f"Point: ({picked_3d.x:.2f}, {picked_3d.y:.2f}, {picked_3d.z:.2f})")
+                        self.point_label.setText(translate('TrimFaceDialog', 'Point: ({0:.2f}, {1:.2f}, {2:.2f})').format(picked_3d.x, picked_3d.y, picked_3d.z))
                         self.point_label.setStyleSheet("padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;")
 
                         QtCore.QTimer.singleShot(100, self.complete_workflow)
                     except Exception as e:
-                        self.point_label.setText(f"Error: {str(e)}")
+                        self.point_label.setText(translate('TrimFaceDialog', 'Error: {0}').format(str(e)))
                         self.point_label.setStyleSheet("padding: 4px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 3px; color: #721c24;")
 
     def complete_workflow(self):
         """Complete the workflow"""
         self.stop_point_selection()
         self.workflow_stage = 'complete'
-        self.update_status("Ready to apply trim operation")
+        self.update_status(translate('TrimFaceDialog', 'Ready to apply trim operation'))
         self.status_label.setStyleSheet("color: #155724; font-weight: bold; padding: 4px; background-color: #d4edda; border-radius: 3px;")
         self.update_apply_button()
 
@@ -397,7 +400,7 @@ class TrimFaceDialogTaskPanel:
         try:
             # Check if we have the required objects
             if not self.logic.trimming_curves or not self.logic.face_object:
-                FreeCAD.Console.PrintWarning("Cannot show projection visualization: missing curves or face\n")
+                FreeCAD.Console.PrintWarning(translate('TrimFaceDialog', 'Cannot show projection visualization: missing curves or face\n'))
                 self.projection_visualizer_check.setChecked(False)
                 return
 
@@ -428,7 +431,7 @@ class TrimFaceDialogTaskPanel:
         try:
             # Check if we have the required objects
             if not self.logic.trimming_curves or not self.logic.face_object or not self.logic.trim_point:
-                FreeCAD.Console.PrintWarning("Cannot show transparent preview: missing curves, face, or trim point\n")
+                FreeCAD.Console.PrintWarning(translate('TrimFaceDialog', 'Cannot show transparent preview: missing curves, face, or trim point\n'))
                 self.transparent_preview_check.setChecked(False)
                 return
 
@@ -610,13 +613,13 @@ class TrimFaceDialogTaskPanel:
     def on_clear_face(self):
         """Clear the selected face"""
         self.logic.set_face_object(None)
-        self.face_label.setText("No face selected")
+        self.face_label.setText(translate('TrimFaceDialog', 'No face selected'))
         self.face_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
         self.extension_group.setVisible(False)
 
         # Also clear and disable point when face is cleared
         self.logic.set_trim_point(None)
-        self.point_label.setText("No point selected")
+        self.point_label.setText(translate('TrimFaceDialog', 'No point selected'))
         self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
         self.point_group.setEnabled(False)
 
@@ -630,7 +633,7 @@ class TrimFaceDialogTaskPanel:
     def on_clear_point(self):
         """Clear the selected point"""
         self.logic.set_trim_point(None)
-        self.point_label.setText("No point selected")
+        self.point_label.setText(translate('TrimFaceDialog', 'No point selected'))
         self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
         self.update_apply_button()
 
@@ -683,7 +686,7 @@ class TrimFaceDialogTaskPanel:
 
                     self.logic.set_direction(custom_vector)
                 except ValueError as e:
-                    self.status_label.setText("Error: Invalid custom vector")
+                    self.status_label.setText(translate('TrimFaceDialog', 'Error: Invalid custom vector'))
                     self.status_label.setStyleSheet("color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;")
                     FreeCAD.Console.PrintError(f"Invalid vector: {str(e)}\n")
                     return
@@ -700,7 +703,7 @@ class TrimFaceDialogTaskPanel:
 
             FreeCADGui.Control.closeDialog()
         except Exception as e:
-            self.status_label.setText(f"Error: {str(e)}")
+            self.status_label.setText(translate('TrimFaceDialog', 'Error: {0}').format(str(e)))
             self.status_label.setStyleSheet("color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;")
             FreeCAD.Console.PrintError(f"Trim operation failed: {str(e)}\n")
 
@@ -764,6 +767,13 @@ class TrimFaceDialogTaskPanel:
         We have our own Apply/Cancel buttons, so we don't need the defaults.
         """
         return True
+
+    def getStandardButtons(self):
+        """
+        Return 0 to hide all standard buttons.
+        Combined with needsFullSpace(), this ensures no default buttons appear.
+        """
+        return 0
 
     def _show_vector_gizmo(self):
         """
