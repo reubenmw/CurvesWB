@@ -8,6 +8,9 @@ from .dialog_panel import TrimFaceDialogTaskPanel
 
 TOOL_ICON = os.path.join(ICONPATH, 'trimFace.svg')
 
+# Translation function
+translate = FreeCAD.Qt.translate
+
 
 class TrimFaceDialogCommand:
     def Activated(self):
@@ -21,8 +24,8 @@ class TrimFaceDialogCommand:
     def GetResources(self):
         return {
             'Pixmap': TOOL_ICON,
-            'MenuText': 'Trim Face Dialog',
-            'ToolTip': 'Trim a face using curves projection of camera direction, normal, or custom vector direction',
+            'MenuText': translate('TrimFaceDialog', 'Trim Face Dialog'),
+            'ToolTip': translate('TrimFaceDialog', 'Trim a face using curves projection of camera direction, normal, or custom vector direction'),
         }
 
 
