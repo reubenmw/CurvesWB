@@ -114,6 +114,15 @@ class TrimFaceDialogTaskPanel:
         # Hover callback for real-time preview during point selection
         self.hover_callback = None
 
+        # Store original edge colors for restoration
+        self.original_edge_colors = {}
+
+        # FreeCAD standard selection color from Qt palette (matching system theme)
+        # This uses the system's highlight color which can be purple depending on theme
+        palette = self.form.style().standardPalette()
+        highlight_color = palette.highlight().color()
+        self.selection_highlight_color = (highlight_color.redF(), highlight_color.greenF(), highlight_color.blueF())
+
         # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
         self.point_group.setEnabled(False)
@@ -134,6 +143,9 @@ class TrimFaceDialogTaskPanel:
                         self.logic.add_trimming_curve(sel_obj.Object, subname)
                         display_name = f"{sel_obj.Object.Name}.{subname}"
                         self.curve_list.addItem(display_name)
+
+                        # Highlight pre-selected curves with selection color
+                        self._highlight_curve(sel_obj.Object, subname)
 
     def start_workflow(self):
         """Start the fluid workflow"""
@@ -163,6 +175,9 @@ class TrimFaceDialogTaskPanel:
         display_name = f"{obj.Name}.{subname}"
         self.curve_list.addItem(display_name)
         self.update_status(translate('TrimFaceDialog', '{0} edge(s) selected').format(self.curve_list.count()))
+
+        # Highlight the selected curve with FreeCAD standard selection color
+        self._highlight_curve(obj, subname)
 
         modifiers = QtGui.QApplication.keyboardModifiers()
         multi_select = bool(modifiers & (Qt.ControlModifier | Qt.ShiftModifier))
@@ -596,6 +611,9 @@ class TrimFaceDialogTaskPanel:
 
     def on_clear_curves(self):
         """Clear all curves"""
+        # Restore original colors for all highlighted curves
+        self._restore_all_curve_colors()
+
         self.curve_list.clear()
         self.logic.clear_trimming_curves()
 
@@ -607,6 +625,11 @@ class TrimFaceDialogTaskPanel:
         """Remove selected curve"""
         current_row = self.curve_list.currentRow()
         if current_row >= 0:
+            # Restore color for the curve being removed
+            if current_row < len(self.logic.trimming_curves):
+                obj, subname = self.logic.trimming_curves[current_row]
+                self._restore_curve_color(obj, subname)
+
             self.logic.remove_trimming_curve(current_row)
             self.curve_list.takeItem(current_row)
 
@@ -697,6 +720,7 @@ class TrimFaceDialogTaskPanel:
             self._cleanup_vector_gizmo()
             self._hide_transparent_preview()
             self._hide_projection_visualizer()
+            self._restore_all_curve_colors()  # Restore original curve colors
             if self.hover_callback:
                 self.hover_callback.remove()
                 self.hover_callback = None
@@ -713,6 +737,7 @@ class TrimFaceDialogTaskPanel:
         self._cleanup_vector_gizmo()
         self._hide_transparent_preview()
         self._hide_projection_visualizer()
+        self._restore_all_curve_colors()  # Restore original curve colors
         if self.hover_callback:
             self.hover_callback.remove()
             self.hover_callback = None
@@ -901,13 +926,97 @@ class TrimFaceDialogTaskPanel:
     def _on_vector_field_changed(self):
         """
         Callback when X/Y/Z input fields change.
-        
+
         Updates the projection visualization if it's active when custom vector values change.
         """
         # Update projection visualization if it's active and we're in Custom Vector mode
         if self.direction_custom_radio.isChecked() and self.projection_visualizer_check.isChecked():
             self._hide_projection_visualizer()
             self._show_projection_visualizer()
+
+    def _highlight_curve(self, obj, subname):
+        """
+        Highlight a selected curve with FreeCAD standard selection color.
+
+        Uses the Qt palette system to get the system's highlight color, which can be
+        purple depending on the user's theme. This matches the color used by the
+        fillet tool and other FreeCAD selection operations.
+
+        Args:
+            obj: FreeCAD document object containing the edge
+            subname: Subobject name (e.g., 'Edge1')
+        """
+        try:
+            if not hasattr(obj, 'ViewObject'):
+                return
+
+            # Create a unique key for this curve
+            curve_key = (obj.Name, subname)
+
+            # Store original color if not already stored
+            if curve_key not in self.original_edge_colors:
+                # Get the original line color
+                if hasattr(obj.ViewObject, 'LineColor'):
+                    original_color = obj.ViewObject.LineColor
+                    self.original_edge_colors[curve_key] = original_color
+
+                    # Apply FreeCAD standard selection highlight color
+                    obj.ViewObject.LineColor = self.selection_highlight_color
+                    FreeCAD.Console.PrintMessage(
+                        f"Highlighted {obj.Name}.{subname} with selection color\n"
+                    )
+
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(
+                f"Could not highlight curve {obj.Name}.{subname}: {str(e)}\n"
+            )
+
+    def _restore_curve_color(self, obj, subname):
+        """
+        Restore the original color of a curve.
+
+        Args:
+            obj: FreeCAD document object containing the edge
+            subname: Subobject name (e.g., 'Edge1')
+        """
+        try:
+            curve_key = (obj.Name, subname)
+
+            if curve_key in self.original_edge_colors:
+                if hasattr(obj, 'ViewObject') and hasattr(obj.ViewObject, 'LineColor'):
+                    obj.ViewObject.LineColor = self.original_edge_colors[curve_key]
+                    del self.original_edge_colors[curve_key]
+                    FreeCAD.Console.PrintMessage(
+                        f"Restored original color for {obj.Name}.{subname}\n"
+                    )
+
+        except Exception as e:
+            FreeCAD.Console.PrintWarning(
+                f"Could not restore curve color for {obj.Name}.{subname}: {str(e)}\n"
+            )
+
+    def _restore_all_curve_colors(self):
+        """
+        Restore original colors for all highlighted curves.
+
+        Called when clearing all curves or closing the dialog.
+        """
+        for (obj_name, subname), original_color in list(self.original_edge_colors.items()):
+            try:
+                # Find the object by name
+                obj = FreeCAD.ActiveDocument.getObject(obj_name)
+                if obj and hasattr(obj, 'ViewObject') and hasattr(obj.ViewObject, 'LineColor'):
+                    obj.ViewObject.LineColor = original_color
+                    FreeCAD.Console.PrintMessage(
+                        f"Restored original color for {obj_name}.{subname}\n"
+                    )
+            except Exception as e:
+                FreeCAD.Console.PrintWarning(
+                    f"Could not restore curve color for {obj_name}.{subname}: {str(e)}\n"
+                )
+
+        # Clear the dictionary
+        self.original_edge_colors.clear()
 
     def cleanup_selection(self):
         """Clean up selection observers and gates"""
@@ -934,6 +1043,9 @@ class TrimFaceDialogTaskPanel:
 
         # Clean up projection visualizer
         self._hide_projection_visualizer()
+
+        # Restore original curve colors
+        self._restore_all_curve_colors()
 
         # Clean up transparent preview completely
         self._hide_transparent_preview()
