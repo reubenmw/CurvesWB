@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -143,4 +144,12 @@ node_modules/
 # AI Assistant configuration (user-specific)
 .claude/
 .clinerules/
+=======
+*.pyc
+*.md
+*.fcstd1
+/docFiles/
+.taskmaster/
+.claude/
+>>>>>>> Stashed changes
 .cursor/
