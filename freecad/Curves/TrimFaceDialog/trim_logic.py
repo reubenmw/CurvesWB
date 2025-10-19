@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
-__title__ = 'Trim face dialog - Core logic'
-__author__ = 'Reuben Thomas'
-__license__ = 'LGPL 2.1'
-__doc__ = 'Core business logic for trim face operations'
+__title__ = "Trim face dialog - Core logic"
+__author__ = "Reuben Thomas"
+__license__ = "LGPL 2.1"
+__doc__ = "Core business logic for trim face operations"
 
 import FreeCAD
 import Part
@@ -14,25 +14,26 @@ from .coverage_checker import CoverageChecker
 
 class ExtendedCurveVP:
     """View provider for extended curve objects in the hierarchy system"""
-    
+
     def __init__(self, vobj):
         vobj.Proxy = self
-        
+
     def attach(self, vobj):
         self.Object = vobj.Object
-        
+
     def claimChildren(self):
         """Return the original curve nested under this extended curve"""
-        if hasattr(self.Object, 'Group') and self.Object.Group:
+        if hasattr(self.Object, "Group") and self.Object.Group:
             return self.Object.Group
         return []
-        
+
     def getIcon(self):
         """Return a distinctive icon for extended curves"""
         # Could return a custom icon if needed, for now use default
         return ""
-        
-    if FreeCAD.Version()[0] == '0' and '.'.join(FreeCAD.Version()[1:3]) >= '21.2':
+
+    if FreeCAD.Version()[0] == "0" and ".".join(FreeCAD.Version()[1:3]) >= "21.2":
+
         def dumps(self):
             return {"name": self.Object.Name}
 
@@ -41,6 +42,7 @@ class ExtendedCurveVP:
             return None
 
     else:
+
         def __getstate__(self):
             return {"name": self.Object.Name}
 
@@ -60,13 +62,13 @@ class TrimFaceLogic:
         self.direction = None
         self.trim_point = None
         self.use_auto_direction = True
-        
+
         # Extension settings - Phase 1: Detection and User Preference Capture
         # These properties store user choices for how to handle short curves
-        self.extension_mode = 'boundary'  # 'none', 'boundary', 'custom'
-        self.extension_distance = 10.0    # mm for custom mode
-        self.needs_extension = False      # Boolean flag set by detection
-        
+        self.extension_mode = "boundary"  # 'none', 'boundary', 'custom'
+        self.extension_distance = 10.0  # mm for custom mode
+        self.needs_extension = False  # Boolean flag set by detection
+
         # Coverage checker - handles the geometry analysis
         self.coverage_checker = CoverageChecker()
 
@@ -95,11 +97,11 @@ class TrimFaceLogic:
     def set_extension_mode(self, mode):
         """
         Set extension mode: 'none', 'boundary', or 'custom'
-        
+
         This is like a state setter in React - it validates input before updating.
         The tuple check ('none', 'boundary', 'custom') is like array.includes() in JS.
         """
-        if mode in ('none', 'boundary', 'custom'):
+        if mode in ("none", "boundary", "custom"):
             self.extension_mode = mode
         else:
             FreeCAD.Console.PrintWarning(f"Invalid extension mode: {mode}\n")
@@ -107,7 +109,7 @@ class TrimFaceLogic:
     def set_extension_distance(self, distance):
         """
         Set custom extension distance in mm
-        
+
         Validation and Error Handling Pattern:
         Always validate user input before using it. If invalid, provide a fallback.
         This prevents crashes and gives the user a reasonable default.
@@ -136,13 +138,10 @@ class TrimFaceLogic:
             projection_direction: FreeCAD.Vector or None. If None, uses face normal.
         """
         needs_extension = self.coverage_checker.check_curve_coverage(
-            self.trimming_curves,
-            self.face_object,
-            projection_direction
+            self.trimming_curves, self.face_object, projection_direction
         )
         self.needs_extension = needs_extension
         return needs_extension
-
 
     def _extend_edge_to_boundary(self, edge_shape):
         """
@@ -164,9 +163,9 @@ class TrimFaceLogic:
 
             # Calculate face diagonal as a safe extension distance
             face_diagonal = (
-                (face_bbox.XMax - face_bbox.XMin)**2 +
-                (face_bbox.YMax - face_bbox.YMin)**2 +
-                (face_bbox.ZMax - face_bbox.ZMin)**2
+                (face_bbox.XMax - face_bbox.XMin) ** 2
+                + (face_bbox.YMax - face_bbox.YMin) ** 2
+                + (face_bbox.ZMax - face_bbox.ZMin) ** 2
             ) ** 0.5
 
             # Extension distance: 50% of face diagonal at each end
@@ -199,6 +198,7 @@ class TrimFaceLogic:
                 f"Failed to extend edge to boundary: {str(e)}\n"
             )
             import traceback
+
             traceback.print_exc()
             return edge_shape  # Return original on failure
 
@@ -239,6 +239,7 @@ class TrimFaceLogic:
                 f"Failed to extend edge by distance: {str(e)}\n"
             )
             import traceback
+
             traceback.print_exc()
             return edge_shape  # Return original on failure
 
@@ -254,25 +255,27 @@ class TrimFaceLogic:
             List of (object, subname) tuples with extended edges if needed,
             or original curves if no extension is required.
         """
-        if self.extension_mode == 'none' or not self.needs_extension:
+        if self.extension_mode == "none" or not self.needs_extension:
             # No extension needed - create simple hierarchy: TrimmedFace → Original
             # Still hide originals for clean interface
             for obj_ref, subname in self.trimming_curves:
-                if hasattr(obj_ref, 'ViewObject'):
+                if hasattr(obj_ref, "ViewObject"):
                     obj_ref.ViewObject.Visibility = False
-            
+
             # Nest originals under parent if provided
             if parent_obj is not None:
-                if not hasattr(parent_obj, 'Group'):
-                    parent_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Original curves used")
-                
+                if not hasattr(parent_obj, "Group"):
+                    parent_obj.addProperty(
+                        "App::PropertyLinkList", "Group", "Base", "Original curves used"
+                    )
+
                 original_curves = [obj_ref for obj_ref, _ in self.trimming_curves]
                 parent_obj.Group = original_curves
-                
+
                 FreeCAD.Console.PrintMessage(
                     f"Created simple hierarchy: {parent_obj.Name} → {len(original_curves)} original curve(s)\n"
                 )
-            
+
             return self.trimming_curves
 
         extended_curves = []
@@ -282,12 +285,11 @@ class TrimFaceLogic:
             try:
                 edge_shape = obj_ref.Shape.getElement(subname)
 
-                if self.extension_mode == 'boundary':
+                if self.extension_mode == "boundary":
                     extended_edge = self._extend_edge_to_boundary(edge_shape)
-                elif self.extension_mode == 'custom':
+                elif self.extension_mode == "custom":
                     extended_edge = self._extend_edge_by_distance(
-                        edge_shape,
-                        self.extension_distance
+                        edge_shape, self.extension_distance
                     )
                 else:
                     extended_edge = edge_shape
@@ -295,34 +297,43 @@ class TrimFaceLogic:
                 # Create an extended edge object to replace the original
                 # Name it clearly so user knows it's extended
                 temp_name = f"{obj_ref.Name}_Extended"
-                temp_obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", temp_name)
+                temp_obj = FreeCAD.ActiveDocument.addObject(
+                    "Part::FeaturePython", temp_name
+                )
                 temp_obj.Shape = extended_edge
 
                 # Apply the extended curve view provider for proper hierarchy display
                 ExtendedCurveVP(temp_obj.ViewObject)
 
                 # Apply distinct visual styling for extended curves
-                if hasattr(temp_obj, 'ViewObject'):
+                if hasattr(temp_obj, "ViewObject"):
                     temp_obj.ViewObject.LineColor = (0.8, 0.2, 0.8)  # Purple
                     temp_obj.ViewObject.LineWidth = 2.0
-                    temp_obj.ViewObject.Visibility = False  # Hidden by default (level 2)
+                    temp_obj.ViewObject.Visibility = (
+                        False  # Hidden by default (level 2)
+                    )
 
                 # Create hierarchical structure:
                 # TrimmedFace (level 1, visible) → Extended (level 2, hidden) → Original (level 3, hidden)
-                
+
                 # Ensure Group property exists on extended object
-                if not hasattr(temp_obj, 'Group'):
-                    temp_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Original curve reference")
+                if not hasattr(temp_obj, "Group"):
+                    temp_obj.addProperty(
+                        "App::PropertyLinkList",
+                        "Group",
+                        "Base",
+                        "Original curve reference",
+                    )
 
                 # Nest original under extended curve
                 temp_obj.Group = [obj_ref]
 
                 # Hide the original curve (it's now nested at level 3)
-                if hasattr(obj_ref, 'ViewObject'):
+                if hasattr(obj_ref, "ViewObject"):
                     obj_ref.ViewObject.Visibility = False
 
                 extended_objects.append(temp_obj)
-                extended_curves.append((temp_obj, 'Edge1'))
+                extended_curves.append((temp_obj, "Edge1"))
 
                 FreeCAD.Console.PrintMessage(
                     f"Created extended curve: {temp_name} (purple, hidden)\n"
@@ -338,8 +349,10 @@ class TrimFaceLogic:
         # Nest all extended objects under parent object (level 1)
         if parent_obj is not None and extended_objects:
             # Ensure Group property exists on parent object
-            if not hasattr(parent_obj, 'Group'):
-                parent_obj.addProperty("App::PropertyLinkList", "Group", "Base", "Extended curves used")
+            if not hasattr(parent_obj, "Group"):
+                parent_obj.addProperty(
+                    "App::PropertyLinkList", "Group", "Base", "Extended curves used"
+                )
 
             parent_obj.Group = extended_objects
 
@@ -360,9 +373,11 @@ class TrimFaceLogic:
             # Create the TrimmedFace object first
             obj = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "TrimmedFace")
 
-            from ..TrimFace import trimFace, trimFaceVP
-            trimFace(obj)
-            trimFaceVP(obj.ViewObject)
+            from .trim_face_object import TrimFaceObject
+            from .trim_face_vp import TrimFaceViewProvider
+
+            TrimFaceObject(obj)
+            TrimFaceViewProvider(obj.ViewObject)
 
             obj.Face = (self.face_object[0], [self.face_object[1]])
 
@@ -391,27 +406,33 @@ class TrimFaceLogic:
                     uv = face_shape.Surface.parameter(face_center)
                     normal = face_shape.normalAt(uv[0], uv[1])
                     obj.Direction = FreeCAD.Vector(normal)
-                    FreeCAD.Console.PrintMessage(f"Using face center normal for projection: {obj.Direction}\n")
+                    FreeCAD.Console.PrintMessage(
+                        f"Using face center normal for projection: {obj.Direction}\n"
+                    )
                 except:
                     obj.Direction = FreeCAD.Vector(0, 0, 1)
                     FreeCAD.Console.PrintWarning("Using default direction\n")
             else:
                 obj.Direction = self.direction
-                FreeCAD.Console.PrintMessage(f"Using custom direction for projection: {obj.Direction}\n")
+                FreeCAD.Console.PrintMessage(
+                    f"Using custom direction for projection: {obj.Direction}\n"
+                )
 
             if self.trim_point:
                 try:
                     uv = face_shape.Surface.parameter(self.trim_point)
                     obj.PickedPoint = FreeCAD.Vector(uv[0], uv[1], 0)
                 except Exception as e:
-                    FreeCAD.Console.PrintWarning(f"Could not set picked point: {str(e)}\n")
+                    FreeCAD.Console.PrintWarning(
+                        f"Could not set picked point: {str(e)}\n"
+                    )
                     uv = face_shape.Surface.parameter(face_shape.CenterOfMass)
                     obj.PickedPoint = FreeCAD.Vector(uv[0], uv[1], 0)
             else:
                 uv = face_shape.Surface.parameter(face_shape.CenterOfMass)
                 obj.PickedPoint = FreeCAD.Vector(uv[0], uv[1], 0)
 
-            if hasattr(self.face_object[0], 'ViewObject'):
+            if hasattr(self.face_object[0], "ViewObject"):
                 self.face_object[0].ViewObject.Visibility = False
 
             FreeCAD.ActiveDocument.recompute()
@@ -424,5 +445,6 @@ class TrimFaceLogic:
         except Exception as e:
             FreeCAD.Console.PrintError(f"Error executing trim: {str(e)}\n")
             import traceback
+
             traceback.print_exc()
             raise

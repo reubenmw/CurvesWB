@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
 
-__title__ = 'Trim face dialog - Task panel'
-__author__ = 'Reuben Thomas'
-__license__ = 'LGPL 2.1'
-__doc__ = 'Task panel UI and workflow management for trim face dialog'
-
 import os
 import FreeCAD
 import FreeCADGui
@@ -17,7 +12,7 @@ from .selection_handlers import (
     EdgeSelectionObserver,
     FaceSelectionObserver,
     PointSelectionObserver,
-    HoverPointCallback
+    HoverPointCallback,
 )
 from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI
 from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer
@@ -30,12 +25,25 @@ translate = FreeCAD.Qt.translate
 class TrimFaceDialogTaskPanel:
     """Fluid NX-style dialog for trim face"""
 
-    def __init__(self):
+    def __init__(self, existing_obj=None):
+        """Initialize the task panel
+
+        Args:
+            existing_obj: Optional existing TrimFace object to edit.
+                         If provided, panel will load its properties for editing.
+                         If None, panel creates a new TrimFace object.
+        """
+        # TODO(human): Store the existing object for later use
+        # Add line: self.existing_obj = existing_obj
+        #
+        self.existing_obj = existing_obj
+
         self.logic = TrimFaceLogic()
 
         # Load the UI form from .ui file (Qt Designer interface)
         self.form = FreeCADGui.PySideUic.loadUi(
-            os.path.join(os.path.dirname(__file__), "trim_face_dialog.ui"))
+            os.path.join(os.path.dirname(__file__), "trim_face_dialog.ui")
+        )
 
         # UI References - Like React refs, but for Qt widgets
         # These give us direct access to UI elements for event handling and updates
@@ -43,7 +51,7 @@ class TrimFaceDialogTaskPanel:
         self.curve_list = self.form.curveListWidget
         self.clear_curves_button = self.form.clearCurvesButton
         self.remove_curve_button = self.form.removeCurveButton
-        
+
         # Extension controls UI references - Phase 1: Conditional UI elements
         # These are hidden by default and shown when curves are detected as short
         self.extension_group = self.form.extensionGroup
@@ -74,7 +82,7 @@ class TrimFaceDialogTaskPanel:
         self.form.clearPointButton.clicked.connect(self.on_clear_point)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
-        
+
         # Direction radio button connections - event handling pattern
         self.direction_normal_radio.toggled.connect(self.on_direction_changed)
         self.direction_view_radio.toggled.connect(self.on_direction_changed)
@@ -84,7 +92,7 @@ class TrimFaceDialogTaskPanel:
         self.vector_x_edit.editingFinished.connect(self._on_vector_field_changed)
         self.vector_y_edit.editingFinished.connect(self._on_vector_field_changed)
         self.vector_z_edit.editingFinished.connect(self._on_vector_field_changed)
-        
+
         # Extension radio button connections - Phase 1 event handling
         # These handle user preference changes for extension mode
         self.extension_none_radio.toggled.connect(self.on_extension_changed)
@@ -92,12 +100,16 @@ class TrimFaceDialogTaskPanel:
         self.extension_custom_radio.toggled.connect(self.on_extension_changed)
 
         # Transparent preview connection
-        self.transparent_preview_check.toggled.connect(self.on_transparent_preview_changed)
+        self.transparent_preview_check.toggled.connect(
+            self.on_transparent_preview_changed
+        )
 
         # Projection visualizer connection
-        self.projection_visualizer_check.toggled.connect(self.on_projection_visualizer_changed)
+        self.projection_visualizer_check.toggled.connect(
+            self.on_projection_visualizer_changed
+        )
 
-        self.workflow_stage = 'edges'
+        self.workflow_stage = "edges"
         self.selection_gate = None
         self.selection_observer = None
 
@@ -121,7 +133,11 @@ class TrimFaceDialogTaskPanel:
         # This uses the system's highlight color which can be purple depending on theme
         palette = self.form.style().standardPalette()
         highlight_color = palette.highlight().color()
-        self.selection_highlight_color = (highlight_color.redF(), highlight_color.greenF(), highlight_color.blueF())
+        self.selection_highlight_color = (
+            highlight_color.redF(),
+            highlight_color.greenF(),
+            highlight_color.blueF(),
+        )
 
         # Disable Apply button and Point group initially
         self.apply_button.setEnabled(False)
@@ -139,7 +155,7 @@ class TrimFaceDialogTaskPanel:
         for sel_obj in selection:
             if sel_obj.HasSubObjects:
                 for subname in sel_obj.SubElementNames:
-                    if 'Edge' in subname:
+                    if "Edge" in subname:
                         self.logic.add_trimming_curve(sel_obj.Object, subname)
                         display_name = f"{sel_obj.Object.Name}.{subname}"
                         self.curve_list.addItem(display_name)
@@ -150,20 +166,24 @@ class TrimFaceDialogTaskPanel:
     def start_workflow(self):
         """Start the fluid workflow"""
         if self.curve_list.count() > 0:
-            self.workflow_stage = 'face'
+            self.workflow_stage = "face"
             self.start_face_selection()
         else:
-            self.workflow_stage = 'edges'
+            self.workflow_stage = "edges"
             self.start_edge_selection()
 
     def start_edge_selection(self):
         """Start edge selection mode"""
-        self.workflow_stage = 'edges'
-        self.update_status(translate('TrimFaceDialog', 'Select trimming edges (Ctrl/Shift for multiple)'))
+        self.workflow_stage = "edges"
+        self.update_status(
+            translate(
+                "TrimFaceDialog", "Select trimming edges (Ctrl/Shift for multiple)"
+            )
+        )
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.removeSelectionGate()
-        self.selection_gate = SelectionGate('edge')
+        self.selection_gate = SelectionGate("edge")
         FreeCADGui.Selection.addSelectionGate(self.selection_gate)
 
         self.selection_observer = EdgeSelectionObserver(self)
@@ -174,7 +194,11 @@ class TrimFaceDialogTaskPanel:
         self.logic.add_trimming_curve(obj, subname)
         display_name = f"{obj.Name}.{subname}"
         self.curve_list.addItem(display_name)
-        self.update_status(translate('TrimFaceDialog', '{0} edge(s) selected').format(self.curve_list.count()))
+        self.update_status(
+            translate("TrimFaceDialog", "{0} edge(s) selected").format(
+                self.curve_list.count()
+            )
+        )
 
         # Highlight the selected curve with FreeCAD standard selection color
         self._highlight_curve(obj, subname)
@@ -201,12 +225,12 @@ class TrimFaceDialogTaskPanel:
 
     def start_face_selection(self):
         """Start face selection mode"""
-        self.workflow_stage = 'face'
-        self.update_status(translate('TrimFaceDialog', 'Click on the face to trim'))
+        self.workflow_stage = "face"
+        self.update_status(translate("TrimFaceDialog", "Click on the face to trim"))
         self.update_apply_button()
 
         FreeCADGui.Selection.clearSelection()
-        self.selection_gate = SelectionGate('face')
+        self.selection_gate = SelectionGate("face")
         FreeCADGui.Selection.addSelectionGate(self.selection_gate)
 
         self.selection_observer = FaceSelectionObserver(self)
@@ -215,14 +239,16 @@ class TrimFaceDialogTaskPanel:
     def on_face_selected(self, obj, subname):
         """
         Handle face selection - Integration Point for Extension Detection
-        
+
         This is where Phase 1 extension detection is triggered in the workflow.
         After face selection, we check if curves need extension and show controls.
         """
         self.logic.set_face_object((obj, subname))
         face_name = f"{obj.Name}.{subname}"
         self.face_label.setText(face_name)
-        self.face_label.setStyleSheet("padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;")
+        self.face_label.setStyleSheet(
+            "padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;"
+        )
 
         # Enable point selection group now that face is selected
         self.point_group.setEnabled(True)
@@ -249,8 +275,13 @@ class TrimFaceDialogTaskPanel:
 
     def start_point_selection(self):
         """Start point selection mode"""
-        self.workflow_stage = 'point'
-        self.update_status(translate('TrimFaceDialog', 'Hover over the face to preview - Click to select area to DELETE'))
+        self.workflow_stage = "point"
+        self.update_status(
+            translate(
+                "TrimFaceDialog",
+                "Hover over the face to preview - Click to select area to DELETE",
+            )
+        )
         self.update_apply_button()
 
         FreeCADGui.Selection.clearSelection()
@@ -269,7 +300,7 @@ class TrimFaceDialogTaskPanel:
 
         if selection and len(selection) > 0:
             sel = selection[0]
-            if hasattr(sel, 'PickedPoints') and len(sel.PickedPoints) > 0:
+            if hasattr(sel, "PickedPoints") and len(sel.PickedPoints) > 0:
                 picked_3d = sel.PickedPoints[0]
 
                 if self.logic.face_object:
@@ -281,20 +312,32 @@ class TrimFaceDialogTaskPanel:
                         u, v = face_shape.Surface.parameter(picked_3d)
                         self.logic.set_trim_point(picked_3d)
 
-                        self.point_label.setText(translate('TrimFaceDialog', 'Point: ({0:.2f}, {1:.2f}, {2:.2f})').format(picked_3d.x, picked_3d.y, picked_3d.z))
-                        self.point_label.setStyleSheet("padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;")
+                        self.point_label.setText(
+                            translate(
+                                "TrimFaceDialog", "Point: ({0:.2f}, {1:.2f}, {2:.2f})"
+                            ).format(picked_3d.x, picked_3d.y, picked_3d.z)
+                        )
+                        self.point_label.setStyleSheet(
+                            "padding: 4px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 3px; color: #155724;"
+                        )
 
                         QtCore.QTimer.singleShot(100, self.complete_workflow)
                     except Exception as e:
-                        self.point_label.setText(translate('TrimFaceDialog', 'Error: {0}').format(str(e)))
-                        self.point_label.setStyleSheet("padding: 4px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 3px; color: #721c24;")
+                        self.point_label.setText(
+                            translate("TrimFaceDialog", "Error: {0}").format(str(e))
+                        )
+                        self.point_label.setStyleSheet(
+                            "padding: 4px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 3px; color: #721c24;"
+                        )
 
     def complete_workflow(self):
         """Complete the workflow"""
         self.stop_point_selection()
-        self.workflow_stage = 'complete'
-        self.update_status(translate('TrimFaceDialog', 'Ready to apply trim operation'))
-        self.status_label.setStyleSheet("color: #155724; font-weight: bold; padding: 4px; background-color: #d4edda; border-radius: 3px;")
+        self.workflow_stage = "complete"
+        self.update_status(translate("TrimFaceDialog", "Ready to apply trim operation"))
+        self.status_label.setStyleSheet(
+            "color: #155724; font-weight: bold; padding: 4px; background-color: #d4edda; border-radius: 3px;"
+        )
         self.update_apply_button()
 
     def stop_point_selection(self):
@@ -314,9 +357,11 @@ class TrimFaceDialogTaskPanel:
 
     def update_apply_button(self):
         """Update apply button state"""
-        can_apply = (self.curve_list.count() > 0 and
-                     self.logic.face_object is not None and
-                     self.logic.trim_point is not None)
+        can_apply = (
+            self.curve_list.count() > 0
+            and self.logic.face_object is not None
+            and self.logic.trim_point is not None
+        )
         self.apply_button.setEnabled(can_apply)
 
     def on_direction_changed(self):
@@ -342,7 +387,7 @@ class TrimFaceDialogTaskPanel:
             self._show_projection_visualizer()
         # Note: Do NOT automatically activate projection visualizer
         # It should only appear when user explicitly checks the checkbox
-        
+
         # Update transparent preview if it's active
         if self.transparent_preview_check.isChecked():
             self._hide_transparent_preview()
@@ -351,21 +396,23 @@ class TrimFaceDialogTaskPanel:
     def on_extension_changed(self):
         """
         Handle extension radio button changes - Event Handler Pattern
-        
+
         This is like a state management handler in React. When user changes
         extension mode, we update the logic layer and enable/disable related UI.
-        
+
         Event-driven architecture: User action → Handler → State update → UI update
         """
         if self.extension_none_radio.isChecked():
-            self.logic.set_extension_mode('none')
+            self.logic.set_extension_mode("none")
             self.extension_distance_edit.setEnabled(False)
         elif self.extension_boundary_radio.isChecked():
-            self.logic.set_extension_mode('boundary')
+            self.logic.set_extension_mode("boundary")
             self.extension_distance_edit.setEnabled(False)
         elif self.extension_custom_radio.isChecked():
-            self.logic.set_extension_mode('custom')
-            self.extension_distance_edit.setEnabled(True)  # Enable input for custom distance
+            self.logic.set_extension_mode("custom")
+            self.extension_distance_edit.setEnabled(
+                True
+            )  # Enable input for custom distance
 
     def on_transparent_preview_changed(self):
         """
@@ -381,7 +428,7 @@ class TrimFaceDialogTaskPanel:
             self._show_transparent_preview()
 
             # If we're in point selection mode, install hover callback
-            if self.workflow_stage == 'point':
+            if self.workflow_stage == "point":
                 if self.hover_callback is None:
                     self.hover_callback = HoverPointCallback(self)
                     self.hover_callback.install()
@@ -397,12 +444,12 @@ class TrimFaceDialogTaskPanel:
     def on_projection_visualizer_changed(self):
         """
         Handle projection visualizer checkbox changes.
-        
+
         Shows or hides the curve projection visualization in the 3D viewport
         based on the current selection and projection direction.
         """
         is_checked = self.projection_visualizer_check.isChecked()
-        
+
         if is_checked:
             # Show visualization
             self._show_projection_visualizer()
@@ -415,7 +462,12 @@ class TrimFaceDialogTaskPanel:
         try:
             # Check if we have the required objects
             if not self.logic.trimming_curves or not self.logic.face_object:
-                FreeCAD.Console.PrintWarning(translate('TrimFaceDialog', 'Cannot show projection visualization: missing curves or face\n'))
+                FreeCAD.Console.PrintWarning(
+                    translate(
+                        "TrimFaceDialog",
+                        "Cannot show projection visualization: missing curves or face\n",
+                    )
+                )
                 self.projection_visualizer_check.setChecked(False)
                 return
 
@@ -438,15 +490,26 @@ class TrimFaceDialogTaskPanel:
             FreeCAD.Console.PrintMessage("Projection visualization enabled\n")
 
         except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to show projection visualization: {str(e)}\n")
+            FreeCAD.Console.PrintError(
+                f"Failed to show projection visualization: {str(e)}\n"
+            )
             self.projection_visualizer_check.setChecked(False)
 
     def _show_transparent_preview(self):
         """Show the transparent preview for current trim setup"""
         try:
             # Check if we have the required objects
-            if not self.logic.trimming_curves or not self.logic.face_object or not self.logic.trim_point:
-                FreeCAD.Console.PrintWarning(translate('TrimFaceDialog', 'Cannot show transparent preview: missing curves, face, or trim point\n'))
+            if (
+                not self.logic.trimming_curves
+                or not self.logic.face_object
+                or not self.logic.trim_point
+            ):
+                FreeCAD.Console.PrintWarning(
+                    translate(
+                        "TrimFaceDialog",
+                        "Cannot show transparent preview: missing curves, face, or trim point\n",
+                    )
+                )
                 self.transparent_preview_check.setChecked(False)
                 return
 
@@ -462,13 +525,15 @@ class TrimFaceDialogTaskPanel:
                 self.logic.face_object,
                 self.logic.trimming_curves,
                 projection_dir,
-                self.logic.trim_point  # Pass trim_point for intelligent region selection
+                self.logic.trim_point,  # Pass trim_point for intelligent region selection
             )
 
             FreeCAD.Console.PrintMessage("Transparent preview enabled\n")
 
         except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to show transparent preview: {str(e)}\n")
+            FreeCAD.Console.PrintError(
+                f"Failed to show transparent preview: {str(e)}\n"
+            )
             self.transparent_preview_check.setChecked(False)
 
     def _hide_transparent_preview(self):
@@ -478,7 +543,9 @@ class TrimFaceDialogTaskPanel:
                 self.transparent_preview.hide_preview()
                 FreeCAD.Console.PrintMessage("Transparent preview disabled\n")
             except Exception as e:
-                FreeCAD.Console.PrintError(f"Failed to hide transparent preview: {str(e)}\n")
+                FreeCAD.Console.PrintError(
+                    f"Failed to hide transparent preview: {str(e)}\n"
+                )
 
     def update_hover_preview(self, hover_point):
         """
@@ -507,7 +574,7 @@ class TrimFaceDialogTaskPanel:
                 self.logic.face_object,
                 self.logic.trimming_curves,
                 projection_dir,
-                hover_point  # Use hover point to determine delete region
+                hover_point,  # Use hover point to determine delete region
             )
 
         except Exception as e:
@@ -521,12 +588,14 @@ class TrimFaceDialogTaskPanel:
                 self.projection_visualizer.clear_visualization()
                 FreeCAD.Console.PrintMessage("Projection visualization disabled\n")
             except Exception as e:
-                FreeCAD.Console.PrintError(f"Failed to hide projection visualization: {str(e)}\n")
+                FreeCAD.Console.PrintError(
+                    f"Failed to hide projection visualization: {str(e)}\n"
+                )
 
     def _get_current_projection_direction(self):
         """
         Get the current projection direction based on radio button selection.
-        
+
         Returns:
             FreeCAD.Vector or None: Current projection direction
         """
@@ -563,11 +632,11 @@ class TrimFaceDialogTaskPanel:
         """
         Check if curves need extension and show/hide extension controls accordingly.
         Uses the currently selected projection direction for accurate detection.
-        
+
         Conditional Rendering Pattern (Qt version):
         In React: {needsExtension && <ExtensionGroup />}
         In Qt: self.extension_group.setVisible(needs_extension)
-        
+
         This method demonstrates the complete Phase 1 workflow:
         1. Get current projection direction from UI
         2. Call logic layer for detection
@@ -598,12 +667,16 @@ class TrimFaceDialogTaskPanel:
             projection_dir = None
 
         # Check coverage using the determined direction
-        needs_extension = self.logic.check_curve_coverage(projection_direction=projection_dir)
+        needs_extension = self.logic.check_curve_coverage(
+            projection_direction=projection_dir
+        )
 
         if needs_extension:
             # Show the extension group - conditional rendering
             self.extension_group.setVisible(True)
-            FreeCAD.Console.PrintMessage("Extension controls shown - curve may be shorter than surface\n")
+            FreeCAD.Console.PrintMessage(
+                "Extension controls shown - curve may be shorter than surface\n"
+            )
         else:
             # Hide the extension group - clean interface when not needed
             self.extension_group.setVisible(False)
@@ -617,7 +690,7 @@ class TrimFaceDialogTaskPanel:
         self.curve_list.clear()
         self.logic.clear_trimming_curves()
 
-        if self.workflow_stage != 'edges':
+        if self.workflow_stage != "edges":
             self.cleanup_selection()
             self.start_edge_selection()
 
@@ -636,32 +709,38 @@ class TrimFaceDialogTaskPanel:
     def on_clear_face(self):
         """Clear the selected face"""
         self.logic.set_face_object(None)
-        self.face_label.setText(translate('TrimFaceDialog', 'No face selected'))
-        self.face_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.face_label.setText(translate("TrimFaceDialog", "No face selected"))
+        self.face_label.setStyleSheet(
+            "padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;"
+        )
         self.extension_group.setVisible(False)
 
         # Also clear and disable point when face is cleared
         self.logic.set_trim_point(None)
-        self.point_label.setText(translate('TrimFaceDialog', 'No point selected'))
-        self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.point_label.setText(translate("TrimFaceDialog", "No point selected"))
+        self.point_label.setStyleSheet(
+            "padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;"
+        )
         self.point_group.setEnabled(False)
 
         self.update_apply_button()
 
         # Restart face selection if we're past that stage
-        if self.workflow_stage in ['point', 'complete']:
+        if self.workflow_stage in ["point", "complete"]:
             self.cleanup_selection()
             self.start_face_selection()
 
     def on_clear_point(self):
         """Clear the selected point"""
         self.logic.set_trim_point(None)
-        self.point_label.setText(translate('TrimFaceDialog', 'No point selected'))
-        self.point_label.setStyleSheet("padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;")
+        self.point_label.setText(translate("TrimFaceDialog", "No point selected"))
+        self.point_label.setStyleSheet(
+            "padding: 4px; background-color: #fafafa; border: 1px solid #ddd; border-radius: 3px;"
+        )
         self.update_apply_button()
 
         # Restart point selection if we're at completion stage
-        if self.workflow_stage == 'complete':
+        if self.workflow_stage == "complete":
             self.cleanup_selection()
             self.start_point_selection()
 
@@ -669,7 +748,10 @@ class TrimFaceDialogTaskPanel:
         """Apply the trim operation"""
         try:
             # Capture extension settings if custom mode is selected
-            if self.extension_custom_radio.isChecked() and self.extension_group.isVisible():
+            if (
+                self.extension_custom_radio.isChecked()
+                and self.extension_group.isVisible()
+            ):
                 distance_text = self.extension_distance_edit.text()
                 if distance_text:
                     self.logic.set_extension_distance(distance_text)
@@ -700,17 +782,31 @@ class TrimFaceDialogTaskPanel:
                             face_obj = self.logic.face_object[0]
                             face_subname = self.logic.face_object[1]
                             face_shape = face_obj.Shape.getElement(face_subname)
-                            u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
-                            v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                            u_mid = (
+                                face_shape.ParameterRange[0]
+                                + face_shape.ParameterRange[1]
+                            ) / 2.0
+                            v_mid = (
+                                face_shape.ParameterRange[2]
+                                + face_shape.ParameterRange[3]
+                            ) / 2.0
                             custom_vector = face_shape.normalAt(u_mid, v_mid)
-                            FreeCAD.Console.PrintMessage("Using face normal for zero vector in apply\n")
+                            FreeCAD.Console.PrintMessage(
+                                "Using face normal for zero vector in apply\n"
+                            )
                         else:
-                            raise ValueError("Vector cannot be zero length and no face selected")
+                            raise ValueError(
+                                "Vector cannot be zero length and no face selected"
+                            )
 
                     self.logic.set_direction(custom_vector)
                 except ValueError as e:
-                    self.status_label.setText(translate('TrimFaceDialog', 'Error: Invalid custom vector'))
-                    self.status_label.setStyleSheet("color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;")
+                    self.status_label.setText(
+                        translate("TrimFaceDialog", "Error: Invalid custom vector")
+                    )
+                    self.status_label.setStyleSheet(
+                        "color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;"
+                    )
                     FreeCAD.Console.PrintError(f"Invalid vector: {str(e)}\n")
                     return
 
@@ -727,8 +823,12 @@ class TrimFaceDialogTaskPanel:
 
             FreeCADGui.Control.closeDialog()
         except Exception as e:
-            self.status_label.setText(translate('TrimFaceDialog', 'Error: {0}').format(str(e)))
-            self.status_label.setStyleSheet("color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;")
+            self.status_label.setText(
+                translate("TrimFaceDialog", "Error: {0}").format(str(e))
+            )
+            self.status_label.setStyleSheet(
+                "color: #721c24; font-weight: bold; padding: 4px; background-color: #f8d7da; border-radius: 3px;"
+            )
             FreeCAD.Console.PrintError(f"Trim operation failed: {str(e)}\n")
 
     def on_cancel(self):
@@ -809,7 +909,7 @@ class TrimFaceDialogTaskPanel:
         try:
             # Determine gizmo position and size based on face
             arrow_length = 50.0  # Default
-            arrow_size = 10.0    # Default
+            arrow_size = 10.0  # Default
             position = FreeCAD.Vector(0, 0, 0)  # Default
 
             if self.logic.face_object is not None:
@@ -821,9 +921,11 @@ class TrimFaceDialogTaskPanel:
 
                 # Scale arrow based on face size
                 bbox = face_shape.BoundBox
-                face_diagonal = ((bbox.XLength**2 + bbox.YLength**2 + bbox.ZLength**2)**0.5)
+                face_diagonal = (
+                    bbox.XLength**2 + bbox.YLength**2 + bbox.ZLength**2
+                ) ** 0.5
                 arrow_length = face_diagonal * 0.3  # 30% of face diagonal
-                arrow_size = arrow_length * 0.15     # 15% of arrow length
+                arrow_size = arrow_length * 0.15  # 15% of arrow length
 
                 FreeCAD.Console.PrintMessage(
                     f"Face diagonal: {face_diagonal:.2f}mm, Arrow length: {arrow_length:.2f}mm\n"
@@ -839,9 +941,9 @@ class TrimFaceDialogTaskPanel:
                     direction=FreeCAD.Vector(1, 0, 0),  # Default direction
                     arrow_length=arrow_length,
                     arrow_size=arrow_size,
-                    color=(0.0, 1.0, 1.0)  # Cyan
+                    color=(0.0, 1.0, 1.0),  # Cyan
                 )
-                
+
                 # Create UI integration helper
                 self.vector_ui = VectorGizmoUI(
                     gizmo=self.vector_gizmo,
@@ -850,9 +952,9 @@ class TrimFaceDialogTaskPanel:
                     y_field=self.vector_y_edit,
                     z_field=self.vector_z_edit,
                     smart_default_enabled=True,
-                    smart_default_callback=self._get_face_normal_for_vector
+                    smart_default_callback=self._get_face_normal_for_vector,
                 )
-                
+
                 FreeCAD.Console.PrintMessage("Vector gizmo and UI helper created\n")
             else:
                 # Update existing gizmo position and scaling
@@ -864,6 +966,7 @@ class TrimFaceDialogTaskPanel:
         except Exception as e:
             FreeCAD.Console.PrintError(f"Failed to show vector gizmo: {str(e)}\n")
             import traceback
+
             traceback.print_exc()
 
     def _hide_vector_gizmo(self):
@@ -890,22 +993,26 @@ class TrimFaceDialogTaskPanel:
                 self.vector_ui = None
                 FreeCAD.Console.PrintMessage("Vector gizmo UI helper cleaned up\n")
             except Exception as e:
-                FreeCAD.Console.PrintError(f"Error cleaning up vector UI helper: {str(e)}\n")
-        
+                FreeCAD.Console.PrintError(
+                    f"Error cleaning up vector UI helper: {str(e)}\n"
+                )
+
         if self.vector_gizmo is not None:
             try:
                 self.vector_gizmo.cleanup()
                 self.vector_gizmo = None
                 FreeCAD.Console.PrintMessage("Vector gizmo cleaned up\n")
             except Exception as e:
-                FreeCAD.Console.PrintError(f"Error cleaning up vector gizmo: {str(e)}\n")
+                FreeCAD.Console.PrintError(
+                    f"Error cleaning up vector gizmo: {str(e)}\n"
+                )
 
     def _get_face_normal_for_vector(self):
         """
         Smart default callback for vector gizmo.
-        
+
         Returns the face normal if a face is selected, otherwise Z-axis.
-        
+
         Returns:
             FreeCAD.Vector: Face normal or Z-axis default
         """
@@ -914,8 +1021,12 @@ class TrimFaceDialogTaskPanel:
                 face_obj = self.logic.face_object[0]
                 face_subname = self.logic.face_object[1]
                 face_shape = face_obj.Shape.getElement(face_subname)
-                u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
-                v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                u_mid = (
+                    face_shape.ParameterRange[0] + face_shape.ParameterRange[1]
+                ) / 2.0
+                v_mid = (
+                    face_shape.ParameterRange[2] + face_shape.ParameterRange[3]
+                ) / 2.0
                 return face_shape.normalAt(u_mid, v_mid)
             else:
                 return FreeCAD.Vector(0, 0, 1)  # Z-axis default
@@ -930,7 +1041,10 @@ class TrimFaceDialogTaskPanel:
         Updates the projection visualization if it's active when custom vector values change.
         """
         # Update projection visualization if it's active and we're in Custom Vector mode
-        if self.direction_custom_radio.isChecked() and self.projection_visualizer_check.isChecked():
+        if (
+            self.direction_custom_radio.isChecked()
+            and self.projection_visualizer_check.isChecked()
+        ):
             self._hide_projection_visualizer()
             self._show_projection_visualizer()
 
@@ -947,7 +1061,7 @@ class TrimFaceDialogTaskPanel:
             subname: Subobject name (e.g., 'Edge1')
         """
         try:
-            if not hasattr(obj, 'ViewObject'):
+            if not hasattr(obj, "ViewObject"):
                 return
 
             # Create a unique key for this curve
@@ -956,7 +1070,7 @@ class TrimFaceDialogTaskPanel:
             # Store original color if not already stored
             if curve_key not in self.original_edge_colors:
                 # Get the original line color
-                if hasattr(obj.ViewObject, 'LineColor'):
+                if hasattr(obj.ViewObject, "LineColor"):
                     original_color = obj.ViewObject.LineColor
                     self.original_edge_colors[curve_key] = original_color
 
@@ -983,7 +1097,7 @@ class TrimFaceDialogTaskPanel:
             curve_key = (obj.Name, subname)
 
             if curve_key in self.original_edge_colors:
-                if hasattr(obj, 'ViewObject') and hasattr(obj.ViewObject, 'LineColor'):
+                if hasattr(obj, "ViewObject") and hasattr(obj.ViewObject, "LineColor"):
                     obj.ViewObject.LineColor = self.original_edge_colors[curve_key]
                     del self.original_edge_colors[curve_key]
                     FreeCAD.Console.PrintMessage(
@@ -1001,11 +1115,17 @@ class TrimFaceDialogTaskPanel:
 
         Called when clearing all curves or closing the dialog.
         """
-        for (obj_name, subname), original_color in list(self.original_edge_colors.items()):
+        for (obj_name, subname), original_color in list(
+            self.original_edge_colors.items()
+        ):
             try:
                 # Find the object by name
                 obj = FreeCAD.ActiveDocument.getObject(obj_name)
-                if obj and hasattr(obj, 'ViewObject') and hasattr(obj.ViewObject, 'LineColor'):
+                if (
+                    obj
+                    and hasattr(obj, "ViewObject")
+                    and hasattr(obj.ViewObject, "LineColor")
+                ):
                     obj.ViewObject.LineColor = original_color
                     FreeCAD.Console.PrintMessage(
                         f"Restored original color for {obj_name}.{subname}\n"
@@ -1054,7 +1174,9 @@ class TrimFaceDialogTaskPanel:
                 self.transparent_preview.cleanup()
                 self.transparent_preview = None
             except Exception as e:
-                FreeCAD.Console.PrintWarning(f"Error cleaning up transparent preview: {str(e)}\n")
+                FreeCAD.Console.PrintWarning(
+                    f"Error cleaning up transparent preview: {str(e)}\n"
+                )
 
         # Clean up hover callback
         if self.hover_callback:
@@ -1062,7 +1184,11 @@ class TrimFaceDialogTaskPanel:
             self.hover_callback = None
 
         # Clean up visualization from coverage checker
-        if hasattr(self, 'logic') and self.logic and hasattr(self.logic, 'coverage_checker'):
+        if (
+            hasattr(self, "logic")
+            and self.logic
+            and hasattr(self.logic, "coverage_checker")
+        ):
             try:
                 self.logic.coverage_checker.clear_visualization()
             except:

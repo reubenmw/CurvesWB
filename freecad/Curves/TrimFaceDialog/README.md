@@ -1,97 +1,152 @@
-# Trim Face Dialog - Documentation Index
+# Trim Face Dialog - Developer Overview
 
-## 📚 **START HERE**
+This document explains the files in the TrimFaceDialog tool root directory and their main functions for developers.
 
-**👉 [AUTOMATIC_EXTENSION_COMPLETE.md](AUTOMATIC_EXTENSION_COMPLETE.md)** - Complete feature guide
+## Root Files Overview
 
-**👉 [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md)** - 28 test cases (includes multiple curves tests)
+```
+TrimFaceDialog/
+├── __init__.py                    # Module initialization and exports
+├── command.py                     # FreeCAD command registration
+├── coverage_checker.py            # Curve coverage detection algorithms
+├── dialog_panel.py                # Main UI dialog and workflow management
+├── selection_handlers.py          # User input and selection handling
+├── trim_logic.py                  # Core trim operation logic
+├── TrimFaceDialog.py              # Legacy entry point
+├── TrimFaceDialog.ui              # Qt UI definition file
+├── USER_GUIDE.md                  # Complete user documentation
+├── README.md                      # This developer overview
+├── Dev/                           # Development planning documents
+└── Tests/                         # Testing documentation
+```
 
----
+## Core Files
 
-## 🎯 Key Features
+### `__init__.py`
+**Purpose**: Module initialization and exports
+- Imports and exports main classes
+- Provides clean public API
+- Handles module-level setup
 
-- **✨ Automatic Curve Extension** - Detects short curves, extends automatically
-- **🔢 Multiple Curves** - Select any number of edges (Ctrl/Shift)
-- **📐 Projection-Based Detection** - Respects direction (no false positives)
-- **🌳 Clean Hierarchy** - TrimmedFace → Extended → Original (all hidden by default)
-- **🎨 Three Extension Modes** - None, Boundary (default), Custom distance
-- **📍 Three Projection Modes** - Face Normal, View Direction, Custom Vector
+### `command.py`
+**Purpose**: FreeCAD command registration and execution
+- Registers the "Trim Face Dialog" command in FreeCAD GUI
+- Creates and manages the dialog task panel
+- Handles command lifecycle
 
-## Usage
+### `trim_logic.py`
+**Purpose**: Core business logic for trim operations
+**Main Classes**:
+- `TrimFaceLogic`: Central logic coordinator
+**Key Functions**:
+- Curve coverage detection
+- Automatic curve extension
+- Trim execution
+- Extended curve creation and hierarchy management
 
-1. **Select Edges** (optional): Pre-select trimming curves before opening tool
-2. **Open Tool**: Curves → Trim Face Dialog
-3. **Add Curves**: Click edges (Ctrl/Shift for multiple)
-4. **Select Face**: Click face to trim
-5. **Pick Point**: Click point on face indicating which side to keep
-6. **Apply**: Verify settings and click Apply
+### `dialog_panel.py`
+**Purpose**: Main UI dialog and workflow management
+**Main Classes**:
+- `TrimFaceDialogTaskPanel`: NX-style dialog interface
+**Key Functions**:
+- Multi-stage workflow (edges → face → point → complete)
+- Extension control visibility
+- User interaction handling
+- Settings management
 
-## Projection Direction Options
+### `coverage_checker.py`
+**Purpose**: Advanced projection-based curve coverage detection
+**Main Classes**:
+- `CoverageChecker`: Detection algorithm implementation
+**Key Functions**:
+- Newton-Raphson projection solving
+- UV parameter space calculations
+- Projection mathematics
+- Debug visualization overlay
 
-### Face Normal (Default)
-Projects curve perpendicular to the surface at each point. Best for:
-- Uniform surfaces
-- Standard trimming operations
-- When surface orientation is well-defined
+### `selection_handlers.py`
+**Purpose**: User input and selection handling
+**Main Classes**:
+- `EdgeSelectionObserver`: Edge selection events
+- `FaceSelectionObserver`: Face selection events
+**Key Functions**:
+- Multi-selection support (Ctrl/Shift)
+- Selection validation
+- Workflow state transitions
 
-### View Direction
-Projects along current camera view angle. Best for:
-- Visual-based trimming
-- Matching what you see in viewport
-- Artistic/presentation work
+### `vector_gizmo.py` (MOVED TO UTILS PACKAGE)
+**Purpose**: Interactive 3D arrow gizmo for custom vector input (now available as reusable utility)
+**Location**: `freecad.Curves.Utils.VectorGizmo.VectorGizmo`
+**Key Functions**:
+- Interactive 3D arrow visualization
+- Mouse interaction and drag functionality
+- Bidirectional sync with UI input fields
+- State management (normal/hover/dragging)
+**Usage**: Import from Utils package: `from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI`
 
-### Custom Vector
-Projects along user-defined X, Y, Z vector. Best for:
-- Engineering requirements (specific direction)
-- Batch operations with consistent direction
-- Advanced geometric constraints
+### `projection_visualizer.py` (MOVED TO UTILS PACKAGE)
+**Purpose**: Debug visualization tools (now available as reusable utility)
+**Location**: `freecad.Curves.Utils.CurveProjectionVisualizer.ProjectionVisualizer`
+**Key Functions**:
+- Coin3D overlay creation
+- Projection direction visualization
+- UV space debugging
+- Visual feedback for algorithms
+**Usage**: Import from Utils package: `from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer`
 
-## 🧪 Multiple Curves Testing
+### `TrimFaceDialog.py`
+**Purpose**: Legacy entry point
+- Maintains backward compatibility
+- Delegates to new architecture
 
-**YES - Multiple curves are fully tested!** See [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md) Section 2:
-- ✅ Test 2.1: Two short curves
-- ✅ Test 2.2: Mixed lengths (one short, one long)
-- ✅ Test 2.3: Three+ curves
+### `TrimFaceDialog.ui`
+**Purpose**: Qt UI definition file
+- Dialog layout and widgets
+- UI element properties
+- Form structure for Qt Designer
 
-**Quick verification:** Select 2+ edges with Ctrl+Click, all will be extended and nested properly.
+## Supporting Files
 
----
+### `USER_GUIDE.md`
+Complete user documentation including quick start, features, and troubleshooting.
 
-## 📁 Files
+### `Dev/`
+Development planning documents including feature roadmap, implementation guides, and algorithm fixes.
 
-### Core Code
-- `trim_logic.py` - Extension algorithms, detection (~400 lines)
-- `dialog_panel.py` - UI workflow, event handlers
-- `selection_handlers.py` - Mouse/selection observers
-- `command.py` - FreeCAD command registration
-- `TrimFaceDialog.ui` - Qt Designer UI with extension controls
-- `__init__.py` - Module exports
+### `Tests/`
+Testing documentation and comprehensive test suites covering all functionality.
 
-### Documentation
-- **[AUTOMATIC_EXTENSION_COMPLETE.md](AUTOMATIC_EXTENSION_COMPLETE.md)** - Complete guide ⭐
-- **[TESTING_CHECKLIST.md](TESTING_CHECKLIST.md)** - 28 test cases
-- **[UX_DESIGN.md](UX_DESIGN.md)** - Tree hierarchy design
-- `README.md` - This file
+## Architecture Flow
 
-## Technical Details
+1. **Entry Point**: `command.py` registers command and creates dialog
+2. **UI Layer**: `dialog_panel.py` manages user interface and workflow
+3. **Selection**: `selection_handlers.py` captures user inputs
+4. **Detection**: `coverage_checker.py` analyzes curve coverage
+5. **Logic**: `trim_logic.py` executes core operations
+6. **Visualization**: `freecad.Curves.Utils.CurveProjectionVisualizer` provides debug feedback (reusable utility)
 
-### Selection System
-Uses FreeCAD's selection observers with custom gates for edge/face filtering. Modifier key detection enables fluid multi-select vs auto-advance behavior.
+## Key Dependencies
 
-### Point Picking
-Leverages `PickedPoints` system with 100ms QTimer delay for stable selection. Converts 3D picks to parametric UV coordinates via `Surface.parameter()`.
+- `freecad.Curves.TrimFace`: Core trim functionality
+- `freecad.Curves.curveExtend`: Curve extension algorithms
+- `freecad.Curves.Utils.VectorGizmo`: Reusable 3D arrow gizmo component
+- `freecad.Curves.Utils.CurveProjectionVisualizer`: Reusable projection visualization component
+- FreeCAD API: Object creation, geometry operations, UI integration
+- Qt5: Dialog interface and widget management
 
-### Workflow States
-- `edges`: Initial state, collecting trimming curves
-- `face`: Selecting face to trim
-- `point`: Picking trim side indicator point
-- `complete`: Ready to apply operation
+## Utils Package Integration
 
-## Deployment
+The TrimFaceDialog now leverages reusable components from the `freecad.Curves.Utils` package:
 
-Run `deploy_to_freecad.ps1` to copy files to FreeCAD Mod directory. Requires FreeCAD restart to load changes.
+### VectorGizmo
+- **Import**: `from freecad.Curves.Utils.VectorGizmo import VectorGizmo, VectorGizmoUI`
+- **Purpose**: Interactive 3D arrow for custom vector direction input
+- **Features**: Bidirectional UI sync, smart defaults, proper cleanup
 
-## See Also
+### CurveProjectionVisualizer
+- **Import**: `from freecad.Curves.Utils.CurveProjectionVisualizer import ProjectionVisualizer`
+- **Purpose**: Debug visualization of curve projection onto surfaces
+- **Features**: Colored points, projection rays, UV direction indicators
+- **UI Integration**: Toggle control in dialog for debugging workflows
 
-- Original implementation: `TrimFace.py`
-- Future features: `FUTURE_FEATURES.md`
+These utilities can be reused by other tools in the Curves workbench, promoting code consistency and reducing duplication.

@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 
-__title__ = 'Trim face dialog - Transparent preview overlay'
-__author__ = 'Reuben Thomas'
-__license__ = 'LGPL 2.1'
-__doc__ = 'Real-time transparent preview system for trim face operations'
+__title__ = "Trim face dialog - Transparent preview overlay"
+__license__ = "LGPL 2.1"
+__doc__ = "Real-time transparent preview system for trim face operations"
 
 import FreeCAD
 import FreeCADGui
@@ -14,6 +13,7 @@ from .. import CoinNodes
 
 try:
     import BOPTools.SplitAPI
+
     splitAPI = BOPTools.SplitAPI
 except ImportError:
     FreeCAD.Console.PrintError("Failed importing BOPTools. Fallback to Part API\n")
@@ -23,12 +23,12 @@ except ImportError:
 class TrimPreviewOverlay:
     """
     Real-time visual preview showing trim areas in transparent colors.
-    
+
     This class manages Coin3D scene graph overlays to provide immediate
     visual feedback showing what will be kept (green) and what will be
     removed (red) from the target face before applying the operation.
     """
-    
+
     def __init__(self):
         # Scene graph components
         self.root_separator = None
@@ -66,8 +66,10 @@ class TrimPreviewOverlay:
         self.face_object_ref = None
         self.trimming_curves_ref = None
         self.projection_direction_ref = None
-        
-    def show_preview(self, face_object, trimming_curves, projection_direction=None, trim_point=None):
+
+    def show_preview(
+        self, face_object, trimming_curves, projection_direction=None, trim_point=None
+    ):
         """
         Show the transparent preview overlay.
 
@@ -79,18 +81,18 @@ class TrimPreviewOverlay:
         """
         try:
             start_time = time.time()
-            
+
             # Check if we can use cached results
             # NOTE: Don't use cache during hover mode - trim_point changes constantly
             # if self._can_use_cache(face_object, trimming_curves, projection_direction):
             #     self._show_cached_preview()
             #     return
-            
+
             # Calculate preview mesh (pass trim_point for intelligent region selection)
             keep_mesh, remove_mesh = self._calculate_trim_preview(
                 face_object, trimming_curves, projection_direction, trim_point
             )
-            
+
             if not keep_mesh and not remove_mesh:
                 FreeCAD.Console.PrintWarning("No preview geometry generated\n")
                 # Hide preview if no geometry
@@ -112,33 +114,42 @@ class TrimPreviewOverlay:
             self._add_to_scene()
 
             self.is_active = True
-            
+
             # Cache the results
-            self._cache_results(face_object, trimming_curves, projection_direction, 
-                              keep_mesh, remove_mesh)
-            
+            self._cache_results(
+                face_object,
+                trimming_curves,
+                projection_direction,
+                keep_mesh,
+                remove_mesh,
+            )
+
             calc_time = time.time() - start_time
-            FreeCAD.Console.PrintMessage(f"Preview updated in {calc_time*1000:.1f}ms\n")
-            
+            FreeCAD.Console.PrintMessage(
+                f"Preview updated in {calc_time * 1000:.1f}ms\n"
+            )
+
         except Exception as e:
             FreeCAD.Console.PrintError(f"Failed to show preview: {str(e)}\n")
             self.hide_preview()
-    
+
     def hide_preview(self):
         """Hide the transparent preview overlay."""
         if self.scene_graph_added:
             self._remove_from_scene()
-        
+
         self.is_active = False
         FreeCAD.Console.PrintMessage("Preview hidden\n")
-    
+
     def cleanup(self):
         """Clean up all resources and remove from scene."""
         self.hide_preview()
         self._clear_scene_graph()
         self._clear_cache()
-    
-    def _calculate_trim_preview(self, face_object, trimming_curves, projection_direction, trim_point=None):
+
+    def _calculate_trim_preview(
+        self, face_object, trimming_curves, projection_direction, trim_point=None
+    ):
         """
         Calculate trim preview showing only the delete (red) region.
 
@@ -171,8 +182,12 @@ class TrimPreviewOverlay:
             # Determine projection direction if not provided
             if projection_direction is None:
                 try:
-                    u_mid = (face_shape.ParameterRange[0] + face_shape.ParameterRange[1]) / 2.0
-                    v_mid = (face_shape.ParameterRange[2] + face_shape.ParameterRange[3]) / 2.0
+                    u_mid = (
+                        face_shape.ParameterRange[0] + face_shape.ParameterRange[1]
+                    ) / 2.0
+                    v_mid = (
+                        face_shape.ParameterRange[2] + face_shape.ParameterRange[3]
+                    ) / 2.0
                     projection_direction = face_shape.normalAt(u_mid, v_mid)
                 except:
                     projection_direction = FreeCAD.Vector(0, 0, 1)
@@ -207,6 +222,7 @@ class TrimPreviewOverlay:
         except Exception as e:
             FreeCAD.Console.PrintError(f"Preview calculation failed: {str(e)}\n")
             import traceback
+
             traceback.print_exc()
             # Fallback: show original face as "keep"
             try:
@@ -216,43 +232,45 @@ class TrimPreviewOverlay:
                 return keep_mesh, []
             except:
                 return [], []
-    
-    def _project_curves_onto_face(self, trimming_curves, face_shape, projection_direction):
+
+    def _project_curves_onto_face(
+        self, trimming_curves, face_shape, projection_direction
+    ):
         """
         Project trimming curves onto the target face.
-        
+
         Args:
             trimming_curves: List of (obj, subname) tuples
             face_shape: Part.Face to project onto
             projection_direction: FreeCAD.Vector for projection direction
-            
+
         Returns:
             List of Part.Wire objects representing projected curves
         """
         projected_wires = []
-        
+
         try:
             for curve_obj, curve_subname in trimming_curves:
                 # Get edge shape
                 edge_shape = curve_obj.Shape.getElement(curve_subname)
                 if not isinstance(edge_shape, Part.Edge):
                     continue
-                
+
                 # Project edge onto face
                 projection_result = face_shape.project([edge_shape])
-                
+
                 # Handle both single shape and list results
                 if projection_result:
                     # Ensure we have a list to work with
                     if isinstance(projection_result, Part.Shape):
                         projection_result = [projection_result]
-                    
+
                     # Get the projected edges and create wires
                     projected_edges = []
                     for proj_shape in projection_result:
-                        if hasattr(proj_shape, 'Edges'):
+                        if hasattr(proj_shape, "Edges"):
                             projected_edges.extend(proj_shape.Edges)
-                    
+
                     if projected_edges:
                         # Try to create a wire from projected edges
                         try:
@@ -266,14 +284,16 @@ class TrimPreviewOverlay:
                                     projected_wires.append(wire)
                                 except:
                                     continue
-            
+
             return projected_wires
-            
+
         except Exception as e:
             FreeCAD.Console.PrintError(f"Curve projection failed: {str(e)}\n")
             return []
-    
-    def _create_trim_regions(self, face_shape, wires, projection_direction, trim_point=None):
+
+    def _create_trim_regions(
+        self, face_shape, wires, projection_direction, trim_point=None
+    ):
         """
         Create keep and remove regions by splitting the face with wires.
 
@@ -312,7 +332,9 @@ class TrimPreviewOverlay:
                     tool = w.extrude(-v * d * 2)
                     cuttool.append(tool)
                 except Exception as e:
-                    FreeCAD.Console.PrintWarning(f"Failed to create cutting tool {i}: {str(e)}\n")
+                    FreeCAD.Console.PrintWarning(
+                        f"Failed to create cutting tool {i}: {str(e)}\n"
+                    )
 
             if not cuttool:
                 FreeCAD.Console.PrintWarning("No valid cutting tools created\n")
@@ -321,8 +343,10 @@ class TrimPreviewOverlay:
             # Slice the face - EXACTLY as TrimFace does
             try:
                 # Check if we can use cached split faces
-                use_cached = (self._cached_split_faces is not None and
-                             self._last_face_shape is face_shape)
+                use_cached = (
+                    self._cached_split_faces is not None
+                    and self._last_face_shape is face_shape
+                )
 
                 if use_cached:
                     bf = self._cached_split_faces
@@ -332,7 +356,7 @@ class TrimPreviewOverlay:
                     self._cached_split_faces = bf
                     self._last_face_shape = face_shape
 
-                if bf and hasattr(bf, 'Faces') and len(bf.Faces) > 1:
+                if bf and hasattr(bf, "Faces") and len(bf.Faces) > 1:
                     # Successfully split!
 
                     # NEW UX: No green overlay, only show red for area to be deleted
@@ -357,7 +381,9 @@ class TrimPreviewOverlay:
                                 return None, None
 
                         except Exception as e:
-                            FreeCAD.Console.PrintWarning(f"Could not determine face from trim point: {e}\n")
+                            FreeCAD.Console.PrintWarning(
+                                f"Could not determine face from trim point: {e}\n"
+                            )
                             return None, None
                     else:
                         # No trim point - show first face as delete region
@@ -368,21 +394,27 @@ class TrimPreviewOverlay:
 
                     return keep_face, remove_face
                 else:
-                    FreeCAD.Console.PrintWarning(f"Face splitting produced no split (only {len(bf.Faces)} face(s))\n")
+                    FreeCAD.Console.PrintWarning(
+                        f"Face splitting produced no split (only {len(bf.Faces)} face(s))\n"
+                    )
                     return None, None
 
             except Exception as split_error:
-                FreeCAD.Console.PrintWarning(f"BOPTools split failed: {str(split_error)}\n")
+                FreeCAD.Console.PrintWarning(
+                    f"BOPTools split failed: {str(split_error)}\n"
+                )
                 import traceback
+
                 traceback.print_exc()
                 return face_shape, None
 
         except Exception as e:
             FreeCAD.Console.PrintError(f"Region creation failed: {str(e)}\n")
             import traceback
+
             traceback.print_exc()
             return face_shape, None
-    
+
     def _mesh_face_region(self, face_region):
         """
         Generate mesh points and triangles from a face region for visualization.
@@ -403,9 +435,9 @@ class TrimPreviewOverlay:
 
         # Handle both single faces and compounds of faces
         faces_to_mesh = []
-        if hasattr(face_region, 'Faces'):
+        if hasattr(face_region, "Faces"):
             faces_to_mesh = face_region.Faces
-        elif hasattr(face_region, 'tessellate'):
+        elif hasattr(face_region, "tessellate"):
             faces_to_mesh = [face_region]
         else:
             return []
@@ -416,7 +448,7 @@ class TrimPreviewOverlay:
             point_offset = 0
 
             for face in faces_to_mesh:
-                if not hasattr(face, 'tessellate'):
+                if not hasattr(face, "tessellate"):
                     continue
 
                 # Get tessellated mesh data
@@ -437,7 +469,7 @@ class TrimPreviewOverlay:
                         adjusted_tri = (
                             tri[0] + point_offset,
                             tri[1] + point_offset,
-                            tri[2] + point_offset
+                            tri[2] + point_offset,
                         )
                         all_triangles.append(adjusted_tri)
 
@@ -448,32 +480,33 @@ class TrimPreviewOverlay:
         except Exception as e:
             FreeCAD.Console.PrintWarning(f"Mesh generation failed: {str(e)}\n")
             import traceback
+
             traceback.print_exc()
             return []
-    
+
     def _ensure_scene_graph(self):
         """Ensure the scene graph structure exists."""
         if self.root_separator is None:
             # Create root separator
             self.root_separator = coin.SoSeparator()
-            
+
             # Create materials for keep/remove regions
             self.keep_material = coin.SoMaterial()
             self.keep_material.diffuseColor.setValue(coin.SbColor(*self.keep_color))
             self.keep_material.transparency.setValue(self.transparency)
-            
+
             self.remove_material = coin.SoMaterial()
             self.remove_material.diffuseColor.setValue(coin.SbColor(*self.remove_color))
             self.remove_material.transparency.setValue(self.transparency)
-            
+
             # Create coordinate nodes
             self.keep_coordinates = coin.SoCoordinate3()
             self.remove_coordinates = coin.SoCoordinate3()
-            
+
             # Create indexed face set nodes (for triangle rendering)
             self.keep_faces = coin.SoIndexedFaceSet()
             self.remove_faces = coin.SoIndexedFaceSet()
-            
+
             # Build scene graph structure
             # Keep region (green)
             keep_separator = coin.SoSeparator()
@@ -538,7 +571,7 @@ class TrimPreviewOverlay:
             # Add both to root
             self.root_separator.addChild(keep_separator)
             self.root_separator.addChild(remove_separator)
-    
+
     def _update_preview_mesh(self, keep_mesh, remove_mesh):
         """
         Update the preview mesh in the scene graph.
@@ -558,7 +591,9 @@ class TrimPreviewOverlay:
                 if points and triangles:
                     # Convert points to Coin3D format
                     coin_points = [coin.SbVec3f(*point) for point in points]
-                    self.keep_coordinates.point.setValues(0, len(coin_points), coin_points)
+                    self.keep_coordinates.point.setValues(
+                        0, len(coin_points), coin_points
+                    )
 
                     # Convert triangles to coordIndex format
                     # Coin3D expects: i1, i2, i3, -1, i4, i5, i6, -1, ...
@@ -586,7 +621,9 @@ class TrimPreviewOverlay:
                 if points and triangles:
                     # Convert points to Coin3D format
                     coin_points = [coin.SbVec3f(*point) for point in points]
-                    self.remove_coordinates.point.setValues(0, len(coin_points), coin_points)
+                    self.remove_coordinates.point.setValues(
+                        0, len(coin_points), coin_points
+                    )
 
                     # Convert triangles to coordIndex format
                     indices = []
@@ -604,7 +641,7 @@ class TrimPreviewOverlay:
                 # Clear mesh - use deleteValues to properly remove
                 self.remove_coordinates.point.deleteValues(0)
                 self.remove_faces.coordIndex.deleteValues(0)
-    
+
     def _add_to_scene(self):
         """Add the preview overlay to the FreeCAD scene graph."""
         try:
@@ -621,7 +658,7 @@ class TrimPreviewOverlay:
                         FreeCAD.Console.PrintMessage("Preview overlay added to scene\n")
         except Exception as e:
             FreeCAD.Console.PrintError(f"Failed to add preview to scene: {str(e)}\n")
-    
+
     def _remove_from_scene(self):
         """Remove the preview overlay from the FreeCAD scene graph."""
         try:
@@ -635,10 +672,14 @@ class TrimPreviewOverlay:
                         # Remove our preview overlay
                         scene_graph.removeChild(self.root_separator)
                         self.scene_graph_added = False
-                        FreeCAD.Console.PrintMessage("Preview overlay removed from scene\n")
+                        FreeCAD.Console.PrintMessage(
+                            "Preview overlay removed from scene\n"
+                        )
         except Exception as e:
-            FreeCAD.Console.PrintError(f"Failed to remove preview from scene: {str(e)}\n")
-    
+            FreeCAD.Console.PrintError(
+                f"Failed to remove preview from scene: {str(e)}\n"
+            )
+
     def _clear_scene_graph(self):
         """Clear all scene graph components."""
         self.root_separator = None
@@ -648,48 +689,51 @@ class TrimPreviewOverlay:
         self.remove_coordinates = None
         self.keep_faces = None
         self.remove_faces = None
-    
+
     def _can_use_cache(self, face_object, trimming_curves, projection_direction):
         """Check if cached results can be used."""
         if not self._cached_keep_mesh and not self._cached_remove_mesh:
             return False
-        
+
         # Calculate hashes for comparison
         current_face_hash = self._hash_face_object(face_object)
         current_curves_hash = self._hash_curves_list(trimming_curves)
-        
+
         # Check if anything changed
-        if (current_face_hash != self._last_face_hash or 
-            current_curves_hash != self._last_curves_hash):
+        if (
+            current_face_hash != self._last_face_hash
+            or current_curves_hash != self._last_curves_hash
+        ):
             return False
-        
+
         # Check cache age (max 5 seconds)
         if time.time() - self._last_calculation_time > 5.0:
             return False
-        
+
         return True
-    
-    def _cache_results(self, face_object, trimming_curves, projection_direction,
-                      keep_mesh, remove_mesh):
+
+    def _cache_results(
+        self, face_object, trimming_curves, projection_direction, keep_mesh, remove_mesh
+    ):
         """Cache calculation results for performance."""
         self._last_calculation_time = time.time()
         self._last_face_hash = self._hash_face_object(face_object)
         self._last_curves_hash = self._hash_curves_list(trimming_curves)
         self._cached_keep_mesh = keep_mesh
         self._cached_remove_mesh = remove_mesh
-    
+
     def _show_cached_preview(self):
         """Show the cached preview results."""
         if self._cached_keep_mesh or self._cached_remove_mesh:
             self._ensure_scene_graph()
             self._update_preview_mesh(self._cached_keep_mesh, self._cached_remove_mesh)
-            
+
             if not self.scene_graph_added:
                 self._add_to_scene()
-            
+
             self.is_active = True
             FreeCAD.Console.PrintMessage("Using cached preview\n")
-    
+
     def _clear_cache(self):
         """Clear cached results."""
         self._last_calculation_time = 0.0
@@ -697,12 +741,12 @@ class TrimPreviewOverlay:
         self._last_curves_hash = None
         self._cached_keep_mesh = None
         self._cached_remove_mesh = None
-    
+
     def _hash_face_object(self, face_object):
         """Create a hash for the face object."""
         if not face_object:
             return None
-        
+
         try:
             obj, subname = face_object
             # Use object name, subname, and shape hash
@@ -710,12 +754,12 @@ class TrimPreviewOverlay:
             return hash((obj.Name, subname, shape_hash))
         except:
             return None
-    
+
     def _hash_curves_list(self, trimming_curves):
         """Create a hash for the trimming curves list."""
         if not trimming_curves:
             return None
-        
+
         try:
             curve_hashes = []
             for obj, subname in trimming_curves:
