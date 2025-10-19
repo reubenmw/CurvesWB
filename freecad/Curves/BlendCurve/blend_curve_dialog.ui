@@ -1,0 +1,1174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ui version="4.0">
+    <class>BlendCurveDialog</class>
+    <widget class="QWidget" name="BlendCurveDialog">
+        <property name="geometry">
+            <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>400</width>
+                <height>700</height>
+            </rect>
+        </property>
+        <property name="windowTitle">
+            <string>Blend Curve</string>
+        </property>
+
+        <layout class="QVBoxLayout" name="mainLayout">
+            <property name="spacing">
+                <number>10</number>
+            </property>
+            <property name="margin">
+                <number>10</number>
+            </property>
+
+            <!-- Scroll Area for all controls -->
+            <item>
+                <widget class="QScrollArea" name="scrollArea">
+                    <property name="widgetResizable">
+                        <bool>true</bool>
+                    </property>
+                    <property name="frameShape">
+                        <enum>QFrame::NoFrame</enum>
+                    </property>
+
+                    <widget class="QWidget" name="scrollAreaWidgetContents">
+                        <layout class="QVBoxLayout" name="scrollLayout">
+                            <property name="spacing">
+                                <number>12</number>
+                            </property>
+
+
+                            <!-- SECTION 1: FIRST CURVE                        -->
+
+                            <item>
+                                <widget class="QGroupBox" name="curve1GroupBox">
+                                    <property name="title">
+                                        <string>First Curve</string>
+                                    </property>
+                                    <layout
+                                        class="QVBoxLayout"
+                                        name="curve1Layout"
+                                    >
+                                        <property name="spacing">
+                                            <number>8</number>
+                                        </property>
+
+                                        <!-- Curve 1 Selection -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve1Label"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Curve:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QLineEdit"
+                                                        name="curve1LineEdit"
+                                                    >
+                                                        <property
+                                                            name="readOnly"
+                                                        >
+                                                            <bool>true</bool>
+                                                        </property>
+                                                        <property
+                                                            name="placeholderText"
+                                                        >
+                                                            <string
+                                                            >Click to select...</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve1SelectButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Select</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Scale Slider and Value -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve1ScaleLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Scale:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QSlider"
+                                                        name="curve1ScaleSlider"
+                                                    >
+                                                        <property
+                                                            name="orientation"
+                                                        >
+                                                            <enum
+                                                            >Qt::Horizontal</enum>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <number>1</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <number>300</number>
+                                                        </property>
+                                                        <property name="value">
+                                                            <number>100</number>
+                                                        </property>
+                                                        <property
+                                                            name="styleSheet"
+                                                        >
+                                                            <string
+                                                            >QSlider:disabled { opacity: 0.4; }</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QDoubleSpinBox"
+                                                        name="curve1ScaleSpinBox"
+                                                    >
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <double
+                                                            >0.01</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <double
+                                                            >10000.0</double>
+                                                        </property>
+                                                        <property name="value">
+                                                            <double>1.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="decimals"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve1FlipScaleButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Flip</string>
+                                                        </property>
+                                                        <property
+                                                            name="toolTip"
+                                                        >
+                                                            <string
+                                                            >Flip the scale direction</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Position Slider with Reverse -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve1PositionLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Position:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QSlider"
+                                                        name="curve1PositionSlider"
+                                                    >
+                                                        <property
+                                                            name="orientation"
+                                                        >
+                                                            <enum
+                                                            >Qt::Horizontal</enum>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <number>0</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                        <property name="value">
+                                                            <number>0</number>
+                                                        </property>
+                                                        <property
+                                                            name="styleSheet"
+                                                        >
+                                                            <string
+                                                            >QSlider:disabled { opacity: 0.4; }</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QDoubleSpinBox"
+                                                        name="curve1PositionSpinBox"
+                                                    >
+                                                        <property name="suffix">
+                                                            <string> mm</string>
+                                                        </property>
+                                                        <property
+                                                            name="decimals"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <double>0.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <double
+                                                            >10000.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve1FlipPositionButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Flip</string>
+                                                        </property>
+                                                        <property
+                                                            name="toolTip"
+                                                        >
+                                                            <string
+                                                            >Flip position to other end of curve</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Continuity -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve1ContinuityLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Continuity:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QComboBox"
+                                                        name="curve1ContinuityComboBox"
+                                                    >
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G0 (Positional)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G1 (Tangent)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G2 (Curvature)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G3 (Acceleration)</string>
+                                                            </property>
+                                                        </item>
+                                                        <property
+                                                            name="currentIndex"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>160</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                    </layout>
+                                </widget>
+                            </item>
+
+
+                            <!-- SYMMETRIC MODE (Between Curves)              -->
+
+                            <item>
+                                <layout class="QHBoxLayout">
+                                    <item>
+                                        <spacer>
+                                            <property name="orientation">
+                                                <enum>Qt::Horizontal</enum>
+                                            </property>
+                                        </spacer>
+                                    </item>
+                                    <item>
+                                        <widget
+                                            class="QCheckBox"
+                                            name="symmetricModeCheckBox"
+                                        >
+                                            <property name="text">
+                                                <string>Symmetric Mode</string>
+                                            </property>
+                                            <property name="toolTip">
+                                                <string
+                                                >Mirror all First Curve settings to Second Curve automatically</string>
+                                            </property>
+                                            <property name="styleSheet">
+                                                <string
+                                                >QCheckBox { font-weight: bold; color: #0066cc; }</string>
+                                            </property>
+                                        </widget>
+                                    </item>
+                                    <item>
+                                        <spacer>
+                                            <property name="orientation">
+                                                <enum>Qt::Horizontal</enum>
+                                            </property>
+                                        </spacer>
+                                    </item>
+                                </layout>
+                            </item>
+
+
+                            <!-- SECTION 2: SECOND CURVE                       -->
+
+                            <item>
+                                <widget class="QGroupBox" name="curve2GroupBox">
+                                    <property name="title">
+                                        <string>Second Curve</string>
+                                    </property>
+                                    <property name="enabled">
+                                        <bool>false</bool>
+                                    </property>
+                                    <layout
+                                        class="QVBoxLayout"
+                                        name="curve2Layout"
+                                    >
+                                        <property name="spacing">
+                                            <number>8</number>
+                                        </property>
+
+                                        <!-- Curve 2 Selection -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve2Label"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Curve:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QLineEdit"
+                                                        name="curve2LineEdit"
+                                                    >
+                                                        <property
+                                                            name="readOnly"
+                                                        >
+                                                            <bool>true</bool>
+                                                        </property>
+                                                        <property
+                                                            name="placeholderText"
+                                                        >
+                                                            <string
+                                                            >Click to select...</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve2SelectButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Select</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Scale Slider and Value -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve2ScaleLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Scale:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QSlider"
+                                                        name="curve2ScaleSlider"
+                                                    >
+                                                        <property
+                                                            name="orientation"
+                                                        >
+                                                            <enum
+                                                            >Qt::Horizontal</enum>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <number>1</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <number>300</number>
+                                                        </property>
+                                                        <property name="value">
+                                                            <number>100</number>
+                                                        </property>
+                                                        <property
+                                                            name="styleSheet"
+                                                        >
+                                                            <string
+                                                            >QSlider:disabled { opacity: 0.4; }</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QDoubleSpinBox"
+                                                        name="curve2ScaleSpinBox"
+                                                    >
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <double
+                                                            >0.01</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <double
+                                                            >10000.0</double>
+                                                        </property>
+                                                        <property name="value">
+                                                            <double>1.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="decimals"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve2FlipScaleButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Flip</string>
+                                                        </property>
+                                                        <property
+                                                            name="toolTip"
+                                                        >
+                                                            <string
+                                                            >Flip the scale direction</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Position Slider with Reverse -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve2PositionLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Position:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QSlider"
+                                                        name="curve2PositionSlider"
+                                                    >
+                                                        <property
+                                                            name="orientation"
+                                                        >
+                                                            <enum
+                                                            >Qt::Horizontal</enum>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <number>0</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                        <property name="value">
+                                                            <number>0</number>
+                                                        </property>
+                                                        <property
+                                                            name="styleSheet"
+                                                        >
+                                                            <string
+                                                            >QSlider:disabled { opacity: 0.4; }</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QDoubleSpinBox"
+                                                        name="curve2PositionSpinBox"
+                                                    >
+                                                        <property name="suffix">
+                                                            <string> mm</string>
+                                                        </property>
+                                                        <property
+                                                            name="decimals"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <double>0.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <double
+                                                            >10000.0</double>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QPushButton"
+                                                        name="curve2FlipPositionButton"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Flip</string>
+                                                        </property>
+                                                        <property
+                                                            name="toolTip"
+                                                        >
+                                                            <string
+                                                            >Flip position to other end of curve</string>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>60</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Continuity -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="curve2ContinuityLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Continuity:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QComboBox"
+                                                        name="curve2ContinuityComboBox"
+                                                    >
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G0 (Positional)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G1 (Tangent)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G2 (Curvature)</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >G3 (Acceleration)</string>
+                                                            </property>
+                                                        </item>
+                                                        <property
+                                                            name="currentIndex"
+                                                        >
+                                                            <number>2</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>160</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                    </layout>
+                                </widget>
+                            </item>
+
+
+                            <!-- ADVANCED OPTIONS                              -->
+
+                            <item>
+                                <widget
+                                    class="QGroupBox"
+                                    name="advancedGroupBox"
+                                >
+                                    <property name="title">
+                                        <string>Advanced Options</string>
+                                    </property>
+                                    <property name="checkable">
+                                        <bool>true</bool>
+                                    </property>
+                                    <property name="checked">
+                                        <bool>false</bool>
+                                    </property>
+                                    <layout
+                                        class="QVBoxLayout"
+                                        name="advancedLayout"
+                                    >
+                                        <property name="spacing">
+                                            <number>8</number>
+                                        </property>
+
+                                        <!-- Tension/Bulge Control -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="tensionLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Tension:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>70</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QSlider"
+                                                        name="tensionSlider"
+                                                    >
+                                                        <property
+                                                            name="orientation"
+                                                        >
+                                                            <enum
+                                                            >Qt::Horizontal</enum>
+                                                        </property>
+                                                        <property
+                                                            name="minimum"
+                                                        >
+                                                            <number>0</number>
+                                                        </property>
+                                                        <property
+                                                            name="maximum"
+                                                        >
+                                                            <number>100</number>
+                                                        </property>
+                                                        <property name="value">
+                                                            <number>50</number>
+                                                        </property>
+                                                        <property
+                                                            name="styleSheet"
+                                                        >
+                                                            <string
+                                                            >QSlider:disabled { opacity: 0.4; }</string>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="tensionValueLabel"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >0.50</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>40</number>
+                                                        </property>
+                                                        <property
+                                                            name="alignment"
+                                                        >
+                                                            <set
+                                                            >Qt::AlignRight|Qt::AlignVCenter</set>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Auto-Extend -->
+                                        <item>
+                                            <widget
+                                                class="QCheckBox"
+                                                name="autoExtendCheckBox"
+                                            >
+                                                <property name="text">
+                                                    <string
+                                                    >Auto-Extend Curves</string>
+                                                </property>
+                                                <property name="toolTip">
+                                                    <string
+                                                    >Automatically extend input curves if needed for blend</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+
+                                    </layout>
+                                </widget>
+                            </item>
+
+
+                            <!-- SECTION 3: TRIM CONTROLS                      -->
+
+                            <item>
+                                <widget class="QGroupBox" name="trimGroupBox">
+                                    <property name="title">
+                                        <string>Trim Input Curves</string>
+                                    </property>
+                                    <property name="checkable">
+                                        <bool>true</bool>
+                                    </property>
+                                    <property name="checked">
+                                        <bool>false</bool>
+                                    </property>
+                                    <property name="enabled">
+                                        <bool>false</bool>
+                                    </property>
+                                    <layout
+                                        class="QVBoxLayout"
+                                        name="trimLayout"
+                                    >
+                                        <property name="spacing">
+                                            <number>8</number>
+                                        </property>
+
+                                        <!-- Trim First Curve -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="trim1Label"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >First Curve:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>80</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QComboBox"
+                                                        name="trim1ComboBox"
+                                                    >
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >No Trim</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Trim Start</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Trim End</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Auto-Detect</string>
+                                                            </property>
+                                                        </item>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>160</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                        <!-- Trim Second Curve -->
+                                        <item>
+                                            <layout class="QHBoxLayout">
+                                                <item>
+                                                    <widget
+                                                        class="QLabel"
+                                                        name="trim2Label"
+                                                    >
+                                                        <property name="text">
+                                                            <string
+                                                            >Second Curve:</string>
+                                                        </property>
+                                                        <property
+                                                            name="minimumWidth"
+                                                        >
+                                                            <number>80</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                                <item>
+                                                    <widget
+                                                        class="QComboBox"
+                                                        name="trim2ComboBox"
+                                                    >
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >No Trim</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Trim Start</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Trim End</string>
+                                                            </property>
+                                                        </item>
+                                                        <item>
+                                                            <property
+                                                                name="text"
+                                                            >
+                                                                <string
+                                                                >Auto-Detect</string>
+                                                            </property>
+                                                        </item>
+                                                        <property
+                                                            name="maximumWidth"
+                                                        >
+                                                            <number>160</number>
+                                                        </property>
+                                                    </widget>
+                                                </item>
+                                            </layout>
+                                        </item>
+
+                                    </layout>
+                                </widget>
+                            </item>
+
+                            <!-- Spacer to push everything up -->
+                            <item>
+                                <spacer>
+                                    <property name="orientation">
+                                        <enum>Qt::Vertical</enum>
+                                    </property>
+                                    <property name="sizeHint">
+                                        <size>
+                                            <width>20</width>
+                                            <height>40</height>
+                                        </size>
+                                    </property>
+                                </spacer>
+                            </item>
+
+                        </layout>
+                    </widget>
+                </widget>
+            </item>
+
+
+            <!-- STATUS AND BUTTONS                            -->
+
+
+            <!-- Status Label -->
+            <item>
+                <widget class="QLabel" name="statusLabel">
+                    <property name="text">
+                        <string>Select first curve to begin...</string>
+                    </property>
+                    <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                    </property>
+                    <property name="wordWrap">
+                        <bool>true</bool>
+                    </property>
+                    <property name="styleSheet">
+                        <string
+                        >color: #0066cc; font-style: italic; padding: 6px; background-color: #f0f0f0; border-radius: 3px;</string>
+                    </property>
+                </widget>
+            </item>
+
+            <!-- Buttons -->
+            <item>
+                <layout class="QHBoxLayout" name="buttonLayout">
+                    <item>
+                        <widget class="QPushButton" name="applyButton">
+                            <property name="text">
+                                <string>Apply</string>
+                            </property>
+                            <property name="enabled">
+                                <bool>false</bool>
+                            </property>
+                            <property name="minimumSize">
+                                <size>
+                                    <width>90</width>
+                                    <height>32</height>
+                                </size>
+                            </property>
+                            <property name="styleSheet">
+                                <string notr="true">QPushButton { font-weight: bold; }</string>
+                            </property>
+                        </widget>
+                    </item>
+                    <item>
+                        <widget class="QPushButton" name="cancelButton">
+                            <property name="text">
+                                <string>Cancel</string>
+                            </property>
+                            <property name="minimumSize">
+                                <size>
+                                    <width>90</width>
+                                    <height>32</height>
+                                </size>
+                            </property>
+                        </widget>
+                    </item>
+                </layout>
+            </item>
+
+        </layout>
+    </widget>
+</ui>

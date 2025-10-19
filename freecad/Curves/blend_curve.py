@@ -335,6 +335,8 @@ class BlendCurve:
         """Automatically orient the 2 point tangents
         blend_curve.auto_orient(tol=1e-3)
         Tolerance is used to detect parallel tangents"""
+        # TODO(human): Fix the orientation detection algorithm
+        # Current broken algorithm uses parameter-based detection:
         line1 = self.point1.get_tangent_edge()
         line2 = self.point2.get_tangent_edge()
         p1 = line1.Curve.parameter(self.point2.point)
